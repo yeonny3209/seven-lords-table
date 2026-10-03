@@ -288,7 +288,7 @@ table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7
       </div>
       <div id="spellBar">
         <div class="lordmana">
-          <div class="lm-label">군주 마나 <b id="lmVal">0</b>/10</div>
+          <div class="lm-label">군주 마나 <b id="lmVal">0</b>/<span id="lmMax">10</span></div>
           <div class="lm-bar" id="lmBar"></div>
         </div>
         <div id="spellCards"></div>
@@ -507,6 +507,62 @@ const UNIT_LIST = [
   ['winterqueen','겨울 여왕',   '👸', 5, 'frost',  ['mystic'],   { name: '영원한 겨울', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [260, 390, 2000] }, { t: 'stun', tgt: 'allEnemies', v: [1.5, 2, 6] }] }],
   ['worldtree',  '세계수',      '🌳', 5, 'forest', ['healer'],   { name: '숲의 부름', fx: [{ t: 'summon', unit: 'sapling', n: 2 }, { t: 'heal', tgt: 'allAllies', v: [160, 240, 1000] }] }],
   ['lich',       '리치 왕',     '💀', 5, 'wraith', ['mystic'],   { name: '죽음의 손길', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [520, 780, 3000] }] }],
+  // ═════ 확장 유닛 50종 (코스트별 10종) ═════
+  // ── 1코스트 확장 (10)
+  ['cinderfox',  '불씨 여우',   '🦊', 1, 'fire',   ['assassin'], { name: '불씨 할퀴기', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [190, 285, 440] }, { t: 'burn', tgt: 'target', v: [15, 25, 40], dur: 3 }] }],
+  ['steelcrab',  '강철 게',     '🦀', 1, 'mech',   ['guardian'], { name: '집게 방벽', fx: [{ t: 'shield', tgt: 'self', v: [280, 400, 620], dur: 4 }, { t: 'slow', tgt: 'selfArea', r: 1, v: [0.25, 0.3, 0.4], dur: 2 }] }],
+  ['penguin',    '펭귄 척후병', '🐧', 1, 'frost',  ['vanguard'], { name: '얼음 미끄럼', fx: [{ t: 'dmg', tgt: 'target', v: [150, 225, 350] }, { t: 'slow', tgt: 'target', v: [0.3, 0.35, 0.45], dur: 3 }] }],
+  ['bee',        '꿀벌 치유사', '🐝', 1, 'forest', ['healer'],   { name: '꿀 한 방울', fx: [{ t: 'heal', tgt: 'lowestAlly', v: [210, 315, 500] }, { t: 'buff', tgt: 'lowestAlly', stat: 'armor', v: [20, 30, 50], dur: 3 }] }],
+  ['hedgehog',   '고슴도치 궁수', '🦔', 1, 'forest', ['sniper'], { name: '가시 사격', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [190, 285, 450] }] }],
+  ['wisp',       '도깨비불',    '🕯️', 1, 'wraith', ['mystic'],   { name: '혼불 폭발', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [140, 210, 330] }] }],
+  ['crow',       '까마귀 정찰병', '🐦', 1, 'wraith', ['sniper'], { name: '사냥감 표시', fx: [{ t: 'dmg', tgt: 'lowestEnemy', v: [180, 270, 420] }] }],
+  ['gearsmith',  '톱니 기술자', '🧑‍🔧', 1, 'mech', ['healer'],   { name: '응급 용접', fx: [{ t: 'shield', tgt: 'lowestAlly', v: [230, 340, 520], dur: 4 }] }],
+  ['robodog',    '로봇 강아지', '🐶', 1, 'mech',   ['vanguard'], { name: '전기 물기', fx: [{ t: 'dmg', tgt: 'target', v: [150, 225, 350] }, { t: 'stun', tgt: 'target', v: [0.75, 1, 1.25] }] }],
+  ['moth',       '달빛 나방',   '🦋', 1, 'star',   ['assassin'], { name: '달빛 비행', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'target', v: [170, 255, 400] }] }],
+  // ── 2코스트 확장 (10)
+  ['fireknight', '화염 기사',   '🤺', 2, 'fire',   ['guardian'], { name: '불꽃 방패', fx: [{ t: 'shield', tgt: 'self', v: [360, 520, 820], dur: 4 }, { t: 'burn', tgt: 'selfArea', r: 1, v: [20, 30, 45], dur: 3 }] }],
+  ['lamppriest', '등불 사제',   '🪔', 2, 'fire',   ['healer'],   { name: '따스한 불빛', fx: [{ t: 'heal', tgt: 'allAllies', v: [90, 135, 210] }] }],
+  ['lynx',       '빙하 살쾡이', '🐈', 2, 'frost',  ['assassin'], { name: '눈보라 발톱', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [250, 375, 580] }, { t: 'slow', tgt: 'target', v: [0.35, 0.4, 0.5], dur: 2 }] }],
+  ['frostowl',   '설원 올빼미', '🦉', 2, 'frost',  ['sniper'],   { name: '얼음 깃털', fx: [{ t: 'dmg', tgt: 'target', v: [240, 360, 560] }, { t: 'slow', tgt: 'target', v: [0.35, 0.4, 0.5], dur: 3 }] }],
+  ['mantis',     '사마귀 검객', '🦗', 2, 'forest', ['assassin'], { name: '쌍낫 베기', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [260, 390, 600] }] }],
+  ['luckystar',  '행운의 정령', '🍀', 2, 'star',   ['mystic'],   { name: '행운 폭발', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [200, 300, 470] }, { t: 'heal', tgt: 'lowestAlly', v: [100, 150, 240] }] }],
+  ['soulkeeper', '영혼 수습가', '🪦', 2, 'wraith', ['healer'],   { name: '영혼 봉합', fx: [{ t: 'heal', tgt: 'lowestAllies', n: 2, v: [170, 255, 400] }] }],
+  ['spider',     '독거미',      '🕷️', 2, 'wraith', ['sniper'],   { name: '독침', fx: [{ t: 'dmg', tgt: 'target', v: [220, 330, 520] }, { t: 'burn', tgt: 'target', v: [25, 35, 55], dur: 3 }] }],
+  ['sawdroid',   '톱날 드로이드', '🪚', 2, 'mech', ['assassin'], { name: '회전 톱날', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [270, 405, 630] }] }],
+  ['bard',       '별의 음유시인', '🎻', 2, 'star', ['healer'],   { name: '별의 노래', fx: [{ t: 'heal', tgt: 'allAllies', v: [70, 105, 170] }, { t: 'buff', tgt: 'allAllies', stat: 'as', v: [0.15, 0.2, 0.3], dur: 3 }] }],
+  // ── 3코스트 확장 (10)
+  ['lanternmage', '등롱 술사',  '🏮', 3, 'fire',   ['mystic'],   { name: '떠도는 불씨', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [210, 315, 560] }, { t: 'burn', tgt: 'last', v: [30, 45, 80], dur: 3 }] }],
+  ['flameleopard','화염 표범',  '🐆', 3, 'fire',   ['assassin'], { name: '사냥 본능', fx: [{ t: 'leap', tgt: 'lowestEnemy' }, { t: 'dmg', tgt: 'target', kind: 'phys', v: [330, 495, 920] }] }],
+  ['frostknight','빙결 기사',   '⛄', 3, 'frost',  ['guardian'], { name: '얼음 성벽', fx: [{ t: 'stun', tgt: 'selfArea', r: 1, v: [1.25, 1.5, 2] }, { t: 'shield', tgt: 'self', v: [400, 600, 1100], dur: 4 }] }],
+  ['mammoth',    '매머드 돌격병', '🦣', 3, 'frost', ['vanguard'], { name: '빙하 짓밟기', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [230, 345, 640] }, { t: 'stun', tgt: 'target', v: [1, 1.25, 1.75] }] }],
+  ['badger',     '오소리 드루이드', '🦡', 3, 'forest', ['mystic'], { name: '가시덩굴', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [260, 390, 720] }, { t: 'slow', tgt: 'area', r: 1, v: [0.3, 0.35, 0.45], dur: 3 }] }],
+  ['greybear',   '회색곰 전사', '🐻', 3, 'forest', ['vanguard'], { name: '포효하는 일격', fx: [{ t: 'dmg', tgt: 'target', v: [300, 450, 850] }, { t: 'heal', tgt: 'self', v: [200, 300, 560] }] }],
+  ['necromancer','강령술사',    '🧙‍♂️', 3, 'wraith', ['mystic'], { name: '망자 소환', fx: [{ t: 'summon', unit: 'bonemin', n: 2 }, { t: 'dmg', tgt: 'target', v: [200, 300, 560] }] }],
+  ['meteorrider','유성 기수',   '🐴', 3, 'star',   ['vanguard'], { name: '유성 돌격', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'target', v: [250, 375, 700] }, { t: 'stun', tgt: 'target', v: [1, 1.25, 1.75] }] }],
+  ['helicannon', '헬리콥터 포대', '🚁', 3, 'mech', ['sniper'],   { name: '기총 소사', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 2, v: [260, 390, 720] }] }],
+  ['nebula',     '성운 마도사', '🌌', 3, 'star',   ['mystic'],   { name: '성운 붕괴', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [270, 405, 750] }, { t: 'mana', tgt: 'allAllies', v: [10, 15, 25] }] }],
+  // ── 4코스트 확장 (10)
+  ['efreet',     '이프리트',    '🧞', 4, 'fire',   ['vanguard'], { name: '화염 강림', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [360, 540, 1500] }, { t: 'burn', tgt: 'selfArea', r: 1, v: [50, 75, 180], dur: 3 }] }],
+  ['stardancer', '별빛 무희',   '🏵️', 4, 'star',   ['healer'],   { name: '별의 춤', fx: [{ t: 'heal', tgt: 'allAllies', v: [180, 270, 800] }, { t: 'buff', tgt: 'allAllies', stat: 'atk', v: [0.2, 0.25, 0.5], dur: 4 }] }],
+  ['icedragon',  '빙룡',        '🐲', 4, 'frost',  ['mystic'],   { name: '서리 숨결', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [380, 570, 1700] }, { t: 'stun', tgt: 'area', r: 1, v: [1.5, 1.75, 3] }] }],
+  ['polarhunter','극지 사냥꾼', '🎿', 4, 'frost',  ['sniper'],   { name: '한파 저격', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [460, 690, 2000] }, { t: 'slow', tgt: 'target', v: [0.5, 0.55, 0.7], dur: 3 }] }],
+  ['elderdino',  '대지의 고룡', '🦕', 4, 'forest', ['guardian'], { name: '대지 진동', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [250, 375, 1100] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1.5, 1.75, 3] }, { t: 'heal', tgt: 'self', v: [400, 600, 2000] }] }],
+  ['nanomedic',  '나노 의무병', '💉', 4, 'mech',   ['healer'],   { name: '나노 재생', fx: [{ t: 'heal', tgt: 'allAllies', v: [170, 255, 750] }, { t: 'shield', tgt: 'lowestAllies', n: 2, v: [300, 450, 1300], dur: 4 }] }],
+  ['deathknight','죽음의 기사', '🏇', 4, 'wraith', ['guardian'], { name: '망자의 갑주', fx: [{ t: 'shield', tgt: 'self', v: [600, 900, 2500], dur: 5 }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [200, 300, 900] }] }],
+  ['shadowlord', '그림자 군주', '🦹', 4, 'wraith', ['assassin'], { name: '그림자 포식', fx: [{ t: 'dmg', tgt: 'lowestEnemy', v: [500, 750, 2200] }, { t: 'heal', tgt: 'self', v: [300, 450, 1200] }] }],
+  ['jetfighter', '강철 비룡',   '✈️', 4, 'mech',   ['sniper'],   { name: '융단 폭격', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [350, 525, 1500] }] }],
+  ['starsage',   '별의 현자',   '🪐', 4, 'star',   ['mystic'],   { name: '천체 공명', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [160, 240, 700] }, { t: 'mana', tgt: 'allAllies', v: [15, 20, 40] }] }],
+  // ── 5코스트 확장 (10)
+  ['infernal',   '지옥불 군주', '😈', 5, 'fire',   ['guardian'], { name: '지옥불 고리', fx: [{ t: 'dmg', tgt: 'selfArea', r: 2, v: [420, 630, 5000] }, { t: 'burn', tgt: 'selfArea', r: 2, v: [80, 120, 500], dur: 3 }, { t: 'shield', tgt: 'self', v: [800, 1200, 5000], dur: 5 }] }],
+  ['volcanotitan','화산 거신',  '🗻', 5, 'fire',   ['vanguard'], { name: '화산 낙하', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [520, 780, 6000] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1.5, 2, 5] }] }],
+  ['glaciertitan','빙하 거신',  '🏔️', 5, 'frost',  ['guardian'], { name: '빙하기', fx: [{ t: 'stun', tgt: 'allEnemies', v: [1, 1.25, 4] }, { t: 'shield', tgt: 'allAllies', v: [250, 375, 2000], dur: 4 }] }],
+  ['snowphoenix','설원 봉황',   '🕊️', 5, 'frost',  ['sniper'],   { name: '눈꽃 깃털비', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 4, v: [400, 600, 5000] }, { t: 'slow', tgt: 'last', v: [0.5, 0.6, 0.9], dur: 3 }] }],
+  ['elephantking','코끼리왕',   '🐘', 5, 'forest', ['guardian'], { name: '대지의 포효', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [300, 450, 5000] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [2, 2.5, 6] }, { t: 'heal', tgt: 'allAllies', v: [250, 375, 3000] }] }],
+  ['beastqueen', '야수 여왕',   '🐅', 5, 'forest', ['assassin'], { name: '포식자의 도약', fx: [{ t: 'leap', tgt: 'lowestEnemy' }, { t: 'dmg', tgt: 'target', kind: 'phys', v: [800, 1200, 9999] }] }],
+  ['ninja',      '그림자 닌자', '🥷', 5, 'wraith', ['assassin'], { name: '그림자 처형', fx: [{ t: 'leap', tgt: 'lowestEnemy' }, { t: 'execute', tgt: 'target', v: [0.25, 0.3, 1] }, { t: 'dmg', tgt: 'target', v: [700, 1050, 9999] }] }],
+  ['warmachine', '전쟁 기계',   '🚀', 5, 'mech',   ['vanguard'], { name: '돌파 포격', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [500, 750, 6000] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1, 1.25, 4] }] }],
+  ['aicore',     '초월 연산핵', '🧠', 5, 'mech',   ['mystic'],   { name: '전장 연산', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [300, 450, 4000] }, { t: 'stun', tgt: 'last', v: [0.75, 1, 3] }] }],
+  ['stargoddess','별의 여신',   '💫', 5, 'star',   ['healer'],   { name: '은하의 축복', fx: [{ t: 'heal', tgt: 'allAllies', v: [300, 450, 4000] }, { t: 'shield', tgt: 'allAllies', v: [200, 300, 2000], dur: 4 }, { t: 'mana', tgt: 'allAllies', v: [20, 25, 60] }] }],
 ];
 
 const UNITS = {};
@@ -524,6 +580,8 @@ for (const [id, name, emoji, cost, origin, roles, skill] of UNIT_LIST) {
 }
 // 소환/중립 몬스터 전용 정의 (상점에 나오지 않음)
 const EXTRA_UNITS = {
+  bonemin:  { id: 'bonemin',  name: '뼈 졸개',   emoji: '🦴', cost: 0, origin: null, roles: [], traits: [], hp: 420, atk: 45, as: 0.8, range: 1, armor: 20, mr: 20, mana: 999, startMana: 0, crit: 0.05, skill: null, summon: true },
+  militia:  { id: 'militia',  name: '강철 병사', emoji: '💂', cost: 0, origin: null, roles: [], traits: [], hp: 650, atk: 50, as: 0.7, range: 1, armor: 35, mr: 25, mana: 999, startMana: 0, crit: 0.05, skill: null, summon: true },
   sapling: { id: 'sapling', name: '묘목', emoji: '🌿', cost: 0, origin: null, roles: [], traits: [], hp: 500, atk: 40, as: 0.7, range: 1, armor: 30, mr: 30, mana: 999, startMana: 0, crit: 0, skill: null, summon: true },
   m_slime:  { id: 'm_slime',  name: '슬라임',   emoji: '🟢', cost: 0, traits: [], roles: [], hp: 300, atk: 22, as: 0.6, range: 1, armor: 5,  mr: 5,  mana: 999, startMana: 0, crit: 0, skill: null },
   m_wolf:   { id: 'm_wolf',   name: '들개',     emoji: '🐕', cost: 0, traits: [], roles: [], hp: 520, atk: 45, as: 0.8, range: 1, armor: 15, mr: 10, mana: 999, startMana: 0, crit: 0.1, skill: null },
@@ -669,7 +727,7 @@ const LORD_TYPES = {
   tactic: { name: '책략 군주', icon: '♟️', spells: ['swap', 'frostward'],  passive: '전투의 첫 주문 마나 비용 -2',   desc: '위치·제어형 주문으로 전장을 뒤흔든다.' },
 };
 
-/* ---------- 증강 (30종, 주문 관련 8종) ---------- */
+/* ---------- 증강 (80종, 주문 관련 16종) ---------- */
 const AUGMENTS = {
   income:      { name: '영지 세금',      icon: '💰', desc: '매 라운드 골드 +1' },
   emblem:      { name: '계열 문장',      icon: '🎖️', desc: '{trait} 시너지 요구 인원 -1', param: 'trait' },
@@ -702,6 +760,60 @@ const AUGMENTS = {
   sacrifice:   { name: '희생의 메아리',  icon: '🕊️', desc: '아군이 처치될 때 군주 마나 +2 (기본 +1)', spell: true },
   spellAmp:    { name: '주문 증폭',      icon: '📡', desc: '모든 주문 효과 +20%', spell: true },
   quickCast:   { name: '신속 시전',      icon: '⏱️', desc: '주문 재사용 대기 시간 -30%', spell: true },
+  // ═════ 확장 증강 50종 (주문 관련 8종) ═════
+  // 경제·운영
+  treasure:      { name: '보물 창고',      icon: '🏺', desc: '즉시 30골드 획득, 대신 군주 체력 -10', econ: true },
+  goldenEgg:     { name: '황금알',         icon: '🥚', desc: '4라운드 뒤 부화해 35골드 획득', econ: true },
+  xpBoost:       { name: '속성 교육',      icon: '🎓', desc: '즉시 레벨 +1' },
+  cheapXp:       { name: '할인 교관',      icon: '🏷️', desc: '경험치 구매 비용 -1골드' },
+  itemSmith:     { name: '대장장이',       icon: '⚒', desc: '즉시 무작위 완성 아이템 1개 획득' },
+  supply:        { name: '보급 행렬',      icon: '📦', desc: '2라운드마다 재료 아이템 1개 획득' },
+  patience:      { name: '인내의 미덕',    icon: '🧘', desc: '연패 중이면 매 라운드 골드 +2', econ: true },
+  victoryGold:   { name: '전리품 사냥',    icon: '🏆', desc: '대전에서 이길 때마다 골드 +2', econ: true },
+  broker:        { name: '중개상',         icon: '🤝', desc: '유닛을 판매할 때마다 골드 +1', econ: true },
+  highRoller:    { name: '고급 상점',      icon: '💎', desc: '상점에 1코스트 유닛이 나오지 않고 그만큼 2코스트가 나옴' },
+  rerollMaster:  { name: '리롤 장인',      icon: '🎲', desc: '매 라운드 새로고침 2회 무료', reroll: true },
+  ironWill:      { name: '강철 의지',      icon: '🪨', desc: '패배 시 군주가 받는 피해 -25%' },
+  tripleContract:{ name: '3인 계약',       icon: '👥', desc: '즉시 같은 1코스트 유닛 3개(★2) 획득', reroll: true },
+  legendCall:    { name: '전설의 부름',    icon: '📯', desc: '즉시 무작위 4코스트 유닛 1개 획득' },
+  // 전투
+  ambush:        { name: '기습',           icon: '🌫️', desc: '암살자 유닛이 전투 시작 시 적 후열로 도약' },
+  firstStrike:   { name: '선공',           icon: '🏃', desc: '전투 시작 4초간 모든 아군 공격 속도 +40%' },
+  lastStand:     { name: '최후의 저항',    icon: '🚩', desc: '아군이 3명 이하로 줄면 남은 아군 공격력 +35%' },
+  thornsAll:     { name: '가시 덩굴',      icon: '🌵', desc: '모든 아군이 피격 시 공격자에게 마법 피해 12' },
+  spellVampAll:  { name: '흡혈 마법',      icon: '🩸', desc: '모든 아군이 스킬 피해의 15% 회복' },
+  manaFlow:      { name: '마나 흐름',      icon: '🌊', desc: '모든 아군 공격 시 마나 +3 추가' },
+  tankShield:    { name: '수호 결계',      icon: '🛡', desc: '앞줄 유닛 전투 시작 보호막 300' },
+  backShield:    { name: '후방 장막',      icon: '🧱', desc: '뒤쪽 2줄 유닛 전투 시작 보호막 220' },
+  giantSlayer:   { name: '거인 사냥꾼',    icon: '🪓', desc: '최대 체력 1500 이상인 적에게 주는 피해 +25%' },
+  executioner:   { name: '처형인',         icon: '⚖️', desc: '체력 35% 이하인 적에게 주는 피해 +25%' },
+  eliteFew:      { name: '소수 정예',      icon: '🎖', desc: '보드 유닛이 5명 이하면 모든 아군 체력·공격력 +25%' },
+  commonPower:   { name: '서민의 힘',      icon: '✊', desc: '1·2코스트 유닛 체력·공격력 +20%' },
+  nobleBlood:    { name: '귀족의 혈통',    icon: '🍷', desc: '4·5코스트 유닛 스킬 피해 +30%' },
+  precision:     { name: '치명적 정밀',    icon: '🎯', desc: '모든 아군 치명타 피해 +35%' },
+  armorPierce:   { name: '갑옷 관통',      icon: '🔩', desc: '모든 아군 공격이 대상 방어력 35% 무시' },
+  magicPierce:   { name: '마법 관통',      icon: '🔮', desc: '모든 아군 스킬이 대상 마법 저항 35% 무시' },
+  arsonist:      { name: '방화범',         icon: '🧨', desc: '모든 아군 공격 시 대상에게 화상 (초당 12, 3초)' },
+  stunStart:     { name: '기선 제압',      icon: '💥', desc: '전투 시작 시 무작위 적 2명 1.5초 기절' },
+  reinforce:     { name: '증원군',         icon: '💂', desc: '전투 시작 시 강철 병사 2기 소환' },
+  legion:        { name: '망자의 군단',    icon: '⚰️', desc: '처치된 모든 아군이 2초간 유령으로 공격 (피해 50%)' },
+  phoenixFeather:{ name: '불사조의 깃털',  icon: '🪶', desc: '전투마다 처음 쓰러진 아군 1명이 체력 50%로 부활' },
+  killHeal:      { name: '승리의 함성',    icon: '🎺', desc: '적을 처치한 유닛이 최대 체력 25% 회복' },
+  soulDrink:     { name: '영혼 흡수',      icon: '👻', desc: '적을 처치한 유닛 마나 +40' },
+  accelerate:    { name: '가속',           icon: '⏩', desc: '전투 중 매 초 모든 아군 공격 속도 +3%' },
+  phalanx:       { name: '중앙 집결',      icon: '🏛', desc: '가운데 3열 유닛 방어력·마법 저항 +25' },
+  flanking:      { name: '측면 기동',      icon: '↔️', desc: '양쪽 끝 2열 유닛 공격 속도 +20%' },
+  mercy:         { name: '자비',           icon: '🤲', desc: '아군이 받는 회복·보호막 효과 +25%' },
+  oath:          { name: '수호 맹세',      icon: '🗿', desc: '체력이 가장 높은 아군이 전투 시작 4초간 주변 적 도발' },
+  // 주문 관련 8종
+  freeSpell:     { name: '주문 계시',      icon: '📜', desc: '즉시 새 주문 1장 선택', spell: true },
+  apprentice:    { name: '견습 마법사',    icon: '🧑‍🎓', desc: '주문 강화 비용 -2골드 (최소 1)', spell: true },
+  echo:          { name: '연쇄 시전',      icon: '🔂', desc: '주문을 시전할 때마다 군주 마나 1 반환', spell: true },
+  discount:      { name: '주문 할인',      icon: '🪙', desc: '모든 주문 마나 비용 -1 (최소 1)', spell: true },
+  secondChance:  { name: '두 번째 기회',   icon: '♻️', desc: '전투당 1회 주문을 2회까지 사용', spell: true },
+  grace:         { name: '은총의 주문',    icon: '😇', desc: '아군 대상 주문이 대상 체력도 15% 회복', spell: true },
+  huntMana:      { name: '사냥의 마나',    icon: '🏹', desc: '적을 처치할 때마다 군주 마나 +1', spell: true },
+  manaVault:     { name: '마나 저장고',    icon: '🫙', desc: '군주 마나 최대치 14', spell: true },
 };
 const AUG_KEYS = Object.keys(AUGMENTS);
 
@@ -784,8 +896,10 @@ function makeSideState(spec, idx) {
   const S = {
     idx, spec, name: spec.name, emoji: spec.emoji, isPlayer: !!spec.isPlayer, tiers, aug,
     lordType: spec.lordType, lm: aug.has('manaHead') ? 3 : 0,
+    lmMax: aug.has('manaVault') ? 14 : CFG.LORD_MANA_MAX,
     lmRegen: (tiers.star === 3 ? 1.6 : 1) * (aug.has('manaSpring') ? 1.3 : 1),
-    healAmp: 1 + [0, 0.25, 0.5, 0.9][tiers.healer],
+    healAmp: (1 + [0, 0.25, 0.5, 0.9][tiers.healer]) * (aug.has('mercy') ? 1.25 : 1),
+    phoenixUsed: false, lastStandDone: false,
     spellDmgMult: 1 + (spec.lordType === 'war' ? 0.15 : 0) + [0, 0, 0.15, 0.3][tiers.mystic],
     spellMult: aug.has('spellAmp') ? 1.2 : 1,
     spells: (spec.spells || []).map(s => ({ id: s.id, lvl: s.lvl, rule: s.rule || 'off', cd: 0, used: false })),
@@ -809,6 +923,8 @@ function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
     slows: [], buffs: [], shields: [],
     target: null, atkCd: 0.25 + B.rng.next() * 0.35, moveCd: 0, moveDur: CFG.MOVE_TIME, retargetT: 0,
     atkCount: 0, asStacks: 0, fireBurn: 0, frostSlow: 0, distAmp: 0, leap: false, leapStun: false,
+    thornDmg: 0, spellVamp: 0, manaPerAtk: 0, armorPen: 0, mrPen: 0, giantAmp: 0, execAmp: 0,
+    burnHitDps: 0, asRamp: false, startShield: 0, reviveHp: 400,
     dmgDone: 0, dmgTaken: 0, healDone: 0, summon: !!d.summon, monster: defId.startsWith('m_'),
   };
   // 아이템
@@ -825,6 +941,10 @@ function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
   if (u.fx.has('dmgAmp')) u.dmgAmp += 0.15;
   if (u.fx.has('regen')) u.regen += 0.03;
   if (u.fx.has('revive')) u.revive = true;
+  if (u.fx.has('thorns')) u.thornDmg += 25;
+  if (u.fx.has('spellVamp')) u.spellVamp += 0.2;
+  if (u.fx.has('manaHit')) u.manaPerAtk += 6;
+  if (u.fx.has('burnHit')) u.burnHitDps = 20;
   applyTraitBonuses(S, u);
   // 증강
   const A = S.aug;
@@ -838,6 +958,26 @@ function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
   if (A.has('swift')) u.asBonus += 0.15;
   if (A.has('giant')) u.maxHp *= 1.12;
   if (A.has('lifesteal')) u.lifesteal += 0.10;
+  // 확장 증강
+  const cost = d.cost || 0;
+  if (A.has('commonPower') && cost >= 1 && cost <= 2) { u.maxHp *= 1.2; u.atk *= 1.2; }
+  if (A.has('nobleBlood') && cost >= 4) u.ap += 30;
+  if (A.has('eliteFew') && S.spec.units.length <= 5) { u.maxHp *= 1.25; u.atk *= 1.25; }
+  if (A.has('precision')) u.critDmg += 0.35;
+  if (A.has('thornsAll')) u.thornDmg += 12;
+  if (A.has('spellVampAll')) u.spellVamp += 0.15;
+  if (A.has('manaFlow')) u.manaPerAtk += 3;
+  if (A.has('armorPierce')) u.armorPen = 0.35;
+  if (A.has('magicPierce')) u.mrPen = 0.35;
+  if (A.has('giantSlayer')) u.giantAmp = 0.25;
+  if (A.has('executioner')) u.execAmp = 0.25;
+  if (A.has('arsonist')) u.burnHitDps = Math.max(u.burnHitDps, 12);
+  if (A.has('accelerate')) u.asRamp = true;
+  if (A.has('tankShield') && localRow === 0) u.startShield += 300;
+  if (A.has('backShield') && localRow >= 2) u.startShield += 220;
+  if (A.has('phalanx') && gc >= 2 && gc <= 4) { u.armor += 25; u.mr += 25; }
+  if (A.has('flanking') && (gc <= 1 || gc >= 5)) u.asBonus += 0.2;
+  if (A.has('legion')) { u.ghostT = Math.max(u.ghostT, 2); u.ghostMult = Math.max(u.ghostMult, 0.5); }
   u.hp = u.maxHp;
   u.crit = Math.min(u.crit, 1);
   B.units.push(u);
@@ -868,9 +1008,34 @@ function applyTraitBonuses(S, u) {
 }
 
 function startEffects(B) {
+  // 증원군: 자기 진영 앞쪽 빈 칸에 강철 병사 소환
+  for (const S of B.sides) if (S.aug.has('reinforce')) {
+    for (let i = 0; i < 2; i++) {
+      const free = [];
+      for (let r = 0; r < CFG.ROWS; r++) for (let c = 0; c < CFG.COLS; c++) {
+        const [gr, gc] = toGlobal(S.idx, r, c);
+        if (!B.occ[gr][gc]) free.push([gr, gc, r]);
+      }
+      if (!free.length) break;
+      free.sort((a, b) => a[2] - b[2] || Math.abs(a[1] - 3) - Math.abs(b[1] - 3));
+      const [gr, gc] = free[0];
+      spawnUnit(B, S.idx, 'militia', 1, [], gr, gc, 0);
+    }
+  }
   for (const u of B.units) {
     if (u.mechShield) addShield(B, u, u.mechShield, 999, null);
+    if (u.startShield) addShield(B, u, u.startShield, 999, null);
     if (u.fx.has('locket')) for (const a of alliesOf(B, u.side)) if (cheb(a.r, a.c, u.r, u.c) <= 1) addShield(B, a, 200, 8, null);
+  }
+  for (const S of B.sides) {
+    const mine = alliesOf(B, S.idx);
+    if (S.aug.has('firstStrike')) for (const u of mine) addBuff(u, 'as', 0.4, 4);
+    if (S.aug.has('oath') && mine.length) {
+      const tank = mine.reduce((a, b) => (b.maxHp > a.maxHp ? b : a));
+      tank.taunt = 4; addBuff(tank, 'armor', 30, 4);
+    }
+    if (S.aug.has('stunStart')) for (const e of B.rng.shuffle(enemiesOf(B, S.idx)).slice(0, 2)) applyStun(B, e, 1.5);
+    if (S.aug.has('ambush')) for (const u of mine) if (u.traits.includes('assassin')) u.leap = true;
   }
   for (const u of B.units) if (u.leap) {
     const far = farthestFrom(B, u, enemiesOf(B, u.side));
@@ -951,10 +1116,14 @@ function dealDamage(B, src, tgt, raw, kind, o = {}) {
   if (!targetable(tgt) || raw <= 0) return 0;
   if (o.attack && tgt.fx.has('dodge') && B.rng.chance(0.2)) { emit(B, { t: 'miss', uid: tgt.uid }); return 0; }
   let d = raw;
-  if (src) d *= 1 + src.dmgAmp;
+  if (src) {
+    d *= 1 + src.dmgAmp;
+    if (src.giantAmp && tgt.maxHp >= 1500) d *= 1 + src.giantAmp;
+    if (src.execAmp && tgt.hp <= tgt.maxHp * 0.35) d *= 1 + src.execAmp;
+  }
   if (kind !== 'true') d *= B.amp;
-  if (kind === 'phys') d *= 100 / (100 + Math.max(0, effArmor(tgt)));
-  else if (kind === 'magic') d *= 100 / (100 + Math.max(0, effMr(tgt)));
+  if (kind === 'phys') d *= 100 / (100 + Math.max(0, effArmor(tgt) * (1 - (src ? src.armorPen : 0))));
+  else if (kind === 'magic') d *= 100 / (100 + Math.max(0, effMr(tgt) * (1 - (src && o.skill ? src.mrPen : 0))));
   if (tgt.sunder) d *= 1 + tgt.sunder.amp;
   let left = d;
   for (const s of tgt.shields) { const a = Math.min(s.amt, left); s.amt -= a; left -= a; if (left <= 0) break; }
@@ -968,16 +1137,21 @@ function dealDamage(B, src, tgt, raw, kind, o = {}) {
   emit(B, { t: 'dmg', uid: tgt.uid, a: d, crit: !!o.crit, kind, spell: o.spellSide != null });
   if (src && targetable(src)) {
     if (o.attack && src.lifesteal) healUnit(B, src, src, d * src.lifesteal, true);
-    if (o.skill && src.fx.has('spellVamp')) healUnit(B, src, src, d * 0.2, true);
+    if (o.skill && src.spellVamp) healUnit(B, src, src, d * src.spellVamp, true);
     if (o.attack && tgt.fireBurn) applyBurn(B, src, tgt.fireBurn, 3);
-    if (o.attack && tgt.fx.has('thorns') && !o.reflect) dealDamage(B, tgt, src, 25, 'magic', { reflect: true });
+    if (o.attack && tgt.thornDmg && !o.reflect) dealDamage(B, tgt, src, tgt.thornDmg, 'magic', { reflect: true });
   }
-  if (tgt.hp <= 0) onLethal(B, tgt);
+  if (tgt.hp <= 0) onLethal(B, tgt, src);
   return d;
 }
 
-function onLethal(B, u) {
+function onLethal(B, u, killer) {
   if (u.undying > 0) { u.hp = 1; return; }
+  const S = B.sides[u.side];
+  // 불사조의 깃털: 전투마다 처음 쓰러진 아군 1명 부활
+  if (!u.revive && !u.summon && S.aug.has('phoenixFeather') && !S.phoenixUsed) {
+    S.phoenixUsed = true; u.revive = true; u.reviveHp = u.maxHp * 0.5;
+  }
   if (u.revive) {
     u.revive = false; u.alive = false; u.reviving = 1; u.hp = 0;
     u.shields = []; u.burn = null;
@@ -987,9 +1161,25 @@ function onLethal(B, u) {
   u.alive = false; u.hp = 0; u.shields = []; u.burn = null;
   B.occ[u.r][u.c] = 0;
   emit(B, { t: 'death', uid: u.uid });
-  const S = B.sides[u.side];
-  if (!u.summon) S.lm = Math.min(CFG.LORD_MANA_MAX, S.lm + (S.aug.has('sacrifice') ? 2 : 1));
+  if (!u.summon) S.lm = Math.min(S.lmMax, S.lm + (S.aug.has('sacrifice') ? 2 : 1));
   if (u.ghostT > 0 && !u.summon) { u.ghost = u.ghostT; emit(B, { t: 'ghost', uid: u.uid }); }
+  // 처치한 쪽 효과
+  if (killer && killer.side !== u.side) {
+    const KS = B.sides[killer.side];
+    if (KS.aug.has('huntMana')) KS.lm = Math.min(KS.lmMax, KS.lm + 1);
+    if (targetable(killer)) {
+      if (KS.aug.has('killHeal')) healUnit(B, killer, killer, killer.maxHp * 0.25, true);
+      if (KS.aug.has('soulDrink') && killer.d.skill) killer.mana = Math.min(killer.manaMax, killer.mana + 40);
+    }
+  }
+  // 최후의 저항: 남은 아군이 3명 이하가 되면
+  if (S.aug.has('lastStand') && !S.lastStandDone) {
+    const left = alliesOf(B, u.side).filter(x => !x.summon);
+    if (left.length && left.length <= 3) {
+      S.lastStandDone = true;
+      for (const a of left) { addBuff(a, 'atk', 0.35, 99); emit(B, { t: 'laststand', uid: a.uid }); }
+    }
+  }
 }
 
 function healUnit(B, src, tgt, amt, raw) {
@@ -1044,7 +1234,7 @@ function stepBattle(B) {
 
   // 1) 군주 마나, 주문 재사용 대기, 입력된 주문 이벤트, 자동/AI 시전
   for (const S of B.sides) {
-    S.lm = Math.min(CFG.LORD_MANA_MAX, S.lm + CFG.LORD_MANA_REGEN * S.lmRegen * dt);
+    S.lm = Math.min(S.lmMax, S.lm + CFG.LORD_MANA_REGEN * S.lmRegen * dt);
     for (const sl of S.spells) if (sl.cd > 0) sl.cd = Math.max(0, sl.cd - dt);
   }
   const q = B.queue; B.queue = [];
@@ -1091,7 +1281,7 @@ function runBattle(specA, specB, seed) {
 function updateUnit(B, u, dt, dot) {
   if (u.reviving > 0) {
     u.reviving -= dt;
-    if (u.reviving <= 0) { u.alive = true; u.hp = Math.min(u.maxHp, 400); emit(B, { t: 'revive', uid: u.uid }); }
+    if (u.reviving <= 0) { u.alive = true; u.hp = Math.min(u.maxHp, u.reviveHp); emit(B, { t: 'revive', uid: u.uid }); }
     return;
   }
   if (u.ghost > 0) {
@@ -1113,6 +1303,7 @@ function updateUnit(B, u, dt, dot) {
       if (u.burn && (u.burn.t -= 0.5) <= 0) u.burn = null;
     }
     if (u.regen && u.alive) healUnit(B, null, u, u.maxHp * u.regen * 0.5, true);
+    if (u.asRamp) u.asBonus += 0.015;
     if (u.fx.has('frostAura')) for (const e of enemiesOf(B, u.side)) if (cheb(e.r, e.c, u.r, u.c) <= 2) applySlow(B, e, 0.25, 0.6);
   }
   if (!u.alive) return;
@@ -1200,10 +1391,10 @@ function attack(B, u, t, dist) {
   if (crit) dmg *= u.critDmg;
   emit(B, { t: 'atk', uid: u.uid, tuid: t.uid, ranged: u.range > 1 });
   dealDamage(B, u, t, dmg, 'phys', { attack: true, crit });
-  u.mana = Math.min(u.manaMax, u.mana + 10 + (u.fx.has('manaHit') ? 6 : 0));
+  u.mana = Math.min(u.manaMax, u.mana + 10 + u.manaPerAtk);
   if (u.fx.has('asRamp')) u.asStacks = Math.min(10, u.asStacks + 1);
   if (u.frostSlow) applySlow(B, t, u.frostSlow, 2, false);
-  if (u.fx.has('burnHit')) applyBurn(B, t, 20, 3);
+  if (u.burnHitDps) applyBurn(B, t, u.burnHitDps, 3);
   if (u.fx.has('zap') && u.atkCount % 3 === 0) {
     const others = enemiesOf(B, u.side).filter(e => e !== t).sort((a, b) => cheb(a.r, a.c, t.r, t.c) - cheb(b.r, b.c, t.r, t.c)).slice(0, 2);
     for (const e of [t, ...others]) { emit(B, { t: 'zap', uid: u.uid, tuid: e.uid }); dealDamage(B, u, e, 70, 'magic', { skill: true }); }
@@ -1289,6 +1480,7 @@ function runSkillFx(B, ctx, fx) {
       case 'heal': healUnit(B, u, tg, v * ctx.mult); break;
       case 'shield': addShield(B, tg, v * ctx.mult, fx.dur || 4, u); break;
       case 'buff': addBuff(tg, fx.stat, v, fx.dur || 4); break;
+      case 'mana': if (tg !== u && tg.d.skill) tg.mana = Math.min(tg.manaMax, tg.mana + v); break;
       case 'execute':
         if (tg.hp / tg.maxHp <= v && tg.undying <= 0) { emit(B, { t: 'execute', uid: tg.uid }); dealDamage(B, u, tg, tg.hp + sum(tg.shields.map(s => s.amt)) + 1, 'true', { skill: true }); }
         break;
@@ -1306,6 +1498,7 @@ function runSkillFx(B, ctx, fx) {
 function spellCostNow(S, slot) {
   let c = spellCost(slot.id, slot.lvl);
   if (S.lordType === 'tactic' && S.castCount === 0) c -= 2;
+  if (S.aug.has('discount')) c = Math.max(Math.min(c, 1), c - 1);
   return Math.max(0, c);
 }
 function spellReady(S, i) {
@@ -1341,7 +1534,7 @@ function castSpell(B, side, slotIdx, target, auto) {
   S.lm -= spellCostNow(S, sl);
   S.castCount++;
   S.stats.casts++;
-  if (sp.once) sl.used = true;
+  if (sp.once) { sl.uses = (sl.uses || 0) + 1; if (sl.uses >= (S.aug.has('secondChance') ? 2 : 1)) sl.used = true; }
   else sl.cd = sp.cd * (S.aug.has('quickCast') ? 0.7 : 1);
   const mult = S.spellMult * (auto ? (S.ai && S.ai.mult ? S.ai.mult : CFG.AUTO_CAST_MULT) : 1);
   const v = sp.fx[0].v[sl.lvl - 1];
@@ -1409,6 +1602,11 @@ function castSpell(B, side, slotIdx, target, auto) {
         break;
       }
     }
+  }
+  if (S.aug.has('echo')) S.lm = Math.min(S.lmMax, S.lm + 1);
+  if (S.aug.has('grace')) for (const id of [target.uid, target.uid2]) {
+    const a = id != null ? unitByUid(B, id) : null;
+    if (a && a.side === side && targetable(a)) S.stats.spellHeal += healUnit(B, null, a, a.maxHp * 0.15, true);
   }
   return true;
 }
@@ -1536,7 +1734,7 @@ function aiCastTick(B, S, dt) {
     let tg = ruleTarget(B, S, sl, SPELLS[sl.id].auto[0], loose);
     if (!tg && SPELLS[sl.id].auto[1]) tg = ruleTarget(B, S, sl, SPELLS[sl.id].auto[1], loose);
     // 마나가 가득 차면 낭비하지 않도록 기본 대상에게라도 시전
-    if (!tg && (S.lm >= CFG.LORD_MANA_MAX - 0.5 || (loose && B.tick * CFG.TICK > 4))) tg = ruleTarget(B, S, sl, 'asap', true);
+    if (!tg && (S.lm >= S.lmMax - 0.5 || (loose && B.tick * CFG.TICK > 4))) tg = ruleTarget(B, S, sl, 'asap', true);
     if (!tg) continue;
     if (S.ai.castDelay > 0 && !S.aiArmed) { S.aiArmed = true; S.aiWait = B.rng.next() * S.ai.castDelay; return; }
     S.aiArmed = false;
@@ -1604,7 +1802,7 @@ function makePlayer(id, name, emoji, lordType, isHuman) {
     id, name, emoji, lordType, isHuman, hp: CFG.START_HP, gold: 0, level: 1, xp: 0,
     board: [], bench: new Array(CFG.BENCH).fill(null), shop: [null, null, null, null, null],
     items: [], spells: LORD_TYPES[lordType].spells.map(s => ({ id: s, lvl: 1, rule: 'off' })),
-    equipped: [0, 1], aug: [], streak: 0, alive: true, place: 0, freeRollUsed: false,
+    equipped: [0, 1], aug: [], streak: 0, alive: true, place: 0, freeRolls: 0, eggT: 0,
     lastResult: null, ai: null, history: [],
   };
 }
@@ -1613,8 +1811,9 @@ const human = () => G.players[0];
 const hasAug = (P, id) => P.aug.some(a => a.id === id);
 function boardLimit(P) { return P.level + (hasAug(P, 'bigBoard') ? 1 : 0); }
 function spellSlots(P) { return 2 + (P.level >= 7 ? 1 : 0) + (hasAug(P, 'spellSlot') ? 1 : 0); }
-function xpCost(P) { return CFG.XP_COST + (hasAug(P, 'spellSlot') ? 1 : 0); }
-function rerollCost(P) { return hasAug(P, 'freeRoll') && !P.freeRollUsed ? 0 : hasAug(P, 'cheapRoll') ? 1 : CFG.REROLL_COST; }
+function xpCost(P) { return CFG.XP_COST + (hasAug(P, 'spellSlot') ? 1 : 0) - (hasAug(P, 'cheapXp') ? 1 : 0); }
+function rerollCost(P) { return P.freeRolls > 0 ? 0 : hasAug(P, 'cheapRoll') ? 1 : CFG.REROLL_COST; }
+function spellUpCost(P, s) { return Math.max(1, SPELLS[s.id].up[s.lvl - 1] - (hasAug(P, 'apprentice') ? 2 : 0)); }
 function allUnits(P) { return [...P.board, ...P.bench.filter(Boolean)]; }
 function stageBaseDamage(stage) { return [0, 0, 2, 3, 5, 8, 10, 12, 15, 18][Math.min(stage, 9)]; }
 
@@ -1623,7 +1822,8 @@ function takeFromPool(id, n) { G.pool[id] = Math.max(0, (G.pool[id] || 0) - n); 
 function returnToPool(u) { if (UNITS[u.defId]) G.pool[u.defId] += 3 ** (u.star - 1); }
 
 function rollShop(P) {
-  const odds = SHOP_ODDS[P.level];
+  const odds = SHOP_ODDS[P.level].slice();
+  if (hasAug(P, 'highRoller')) { odds[1] += odds[0]; odds[0] = 0; }
   const r = R();
   for (let i = 0; i < 5; i++) {
     let id = null;
@@ -1698,7 +1898,7 @@ function removeUnit(P, u) {
 function sellPrice(u) { const c = UNITS[u.defId].cost; return u.star === 1 ? c : c * 3 ** (u.star - 1) - (c > 1 ? 1 : 0); }
 function sellUnit(P, u) {
   removeUnit(P, u);
-  P.gold += sellPrice(u);
+  P.gold += sellPrice(u) + (hasAug(P, 'broker') ? 1 : 0);
   P.items.push(...u.items);
   returnToPool(u);
 }
@@ -1722,7 +1922,7 @@ function reroll(P) {
   const c = rerollCost(P);
   if (P.gold < c) return false;
   P.gold -= c;
-  if (c === 0) P.freeRollUsed = true;
+  if (c === 0) P.freeRolls--;
   rollShop(P);
   return true;
 }
@@ -1757,7 +1957,7 @@ function toggleEquip(P, idx) {
 function upgradeSpell(P, idx) {
   const s = P.spells[idx];
   if (!s || s.lvl >= 3) return false;
-  const cost = SPELLS[s.id].up[s.lvl - 1];
+  const cost = spellUpCost(P, s);
   if (P.gold < cost) return false;
   P.gold -= cost;
   s.lvl++;
@@ -1800,17 +2000,37 @@ function applyAugment(P, a) {
     case 'heartyHP': P.hp += 20; break;
     case 'spellHone': for (const s of P.spells) s.lvl = Math.min(3, s.lvl + 1); break;
     case 'library': for (const id of spellOffers(P, 2)) addSpell(P, id); break;
-    case 'hire': {
-      for (let i = 0; i < 2; i++) {
-        const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === 3 && G.pool[k] > 0);
-        if (!ids.length || benchFree(P) < 0) break;
-        const id = r.pick(ids); takeFromPool(id, 1);
-        P.bench[benchFree(P)] = makeUnit(id, 1);
-      }
-      checkMerge(P);
+    case 'hire': for (let i = 0; i < 2; i++) grantRandomUnit(P, 3, 1); break;
+    case 'treasure': P.gold += 30; P.hp -= 10; break;
+    case 'goldenEgg': P.eggT = 4; break;
+    case 'xpBoost': if (P.level < 9) addXp(P, XP_TABLE[P.level] - P.xp); break;
+    case 'itemSmith': P.items.push(itemKey(r.pick(COMP_KEYS), r.pick(COMP_KEYS))); break;
+    case 'tripleContract': {
+      const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === 1 && G.pool[k] >= 3);
+      if (ids.length) { const id = r.pick(ids); takeFromPool(id, 3); placeNewUnit(P, makeUnit(id, 2)); }
       break;
     }
+    case 'legendCall': grantRandomUnit(P, 4, 1); break;
+    case 'freeSpell':
+      if (P.isHuman) G.pendingSpellPick = true;
+      else { const ids = spellOffers(P, 3); if (ids.length) addSpell(P, aiPickSpell(P, ids)); }
+      break;
   }
+}
+// 대기석에 빈 칸이 없으면 유닛을 풀로 돌려보내고 그 가치를 골드로 준다
+function placeNewUnit(P, u) {
+  const f = benchFree(P);
+  if (f >= 0) { P.bench[f] = u; checkMerge(P); return true; }
+  returnToPool(u);
+  P.gold += sellPrice(u);
+  return false;
+}
+function grantRandomUnit(P, cost, star) {
+  const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === cost && G.pool[k] > 0);
+  if (!ids.length) return;
+  const id = R().pick(ids);
+  takeFromPool(id, 1);
+  placeNewUnit(P, makeUnit(id, star));
 }
 
 /* ---------- 라운드 구성 ---------- */
@@ -1838,11 +2058,14 @@ function streakBonus(P) {
 function startPrep() {
   for (const P of G.players) {
     if (!P.alive) continue;
-    const inc = CFG.BASE_INCOME + interest(P) + streakBonus(P) + (hasAug(P, 'income') ? 1 : 0);
+    const inc = CFG.BASE_INCOME + interest(P) + streakBonus(P) + (hasAug(P, 'income') ? 1 : 0)
+      + (hasAug(P, 'patience') && P.streak < 0 ? 2 : 0);
     P.gold += inc;
     P.lastIncome = inc;
     if (G.roundsPlayed > 0) addXp(P, 2 + (hasAug(P, 'scholar') ? 2 : 0));
-    P.freeRollUsed = false;
+    P.freeRolls = (hasAug(P, 'freeRoll') ? 1 : 0) + (hasAug(P, 'rerollMaster') ? 2 : 0);
+    if (P.eggT > 0 && --P.eggT === 0) { P.gold += 35; if (P.isHuman) toast('🥚 황금알 부화! +35골드', 'gold'); }
+    if (hasAug(P, 'supply') && G.roundsPlayed % 2 === 0) P.items.push(R().pick(COMP_KEYS));
     rollShop(P);
   }
 }
@@ -1896,8 +2119,10 @@ function survivorDamage(list) { return sum(list.map(s => s.star + (s.cost >= 4 ?
 function applyResult(P, won, dmg, pvp, oppName) {
   if (won) {
     if (pvp) P.streak = P.streak > 0 ? P.streak + 1 : 1;
+    if (pvp && hasAug(P, 'victoryGold')) P.gold += 2;
   } else {
     if (pvp) P.streak = P.streak < 0 ? P.streak - 1 : -1;
+    if (hasAug(P, 'ironWill')) dmg = Math.max(1, Math.round(dmg * 0.75));
     P.hp -= dmg;
   }
   P.lastResult = { won, dmg: won ? 0 : dmg, opp: oppName };
@@ -2009,7 +2234,7 @@ function aiPrep(P) {
   if (G.stage >= 2) for (const i of P.equipped) {
     const s = P.spells[i];
     if (!s || s.lvl >= 3) continue;
-    const c = SPELLS[s.id].up[s.lvl - 1];
+    const c = spellUpCost(P, s);
     if (P.gold - c >= reserve && r.chance(p.spell * 0.6)) upgradeSpell(P, i);
   }
   // 레벨
@@ -2158,7 +2383,8 @@ function aiPickAugment(P, offers) {
   const p = P.ai.p, r = R();
   const w = offers.map(a => {
     if (AUGMENTS[a.id].spell) return 1 + p.spell * 3;
-    if (['income', 'bigInterest', 'cash'].includes(a.id)) return 1 + p.econ * 3;
+    if (AUGMENTS[a.id].econ || ['income', 'bigInterest', 'cash'].includes(a.id)) return 1 + p.econ * 3;
+    if (AUGMENTS[a.id].reroll) return 1 + p.reroll * 3;
     if (a.id === 'emblem') return 1 + p.commit * 2;
     return 1.6;
   });
@@ -2441,7 +2667,9 @@ function pushEffects(B, events) {
       case 'execute': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '처형!', color: '#ff5f5f', t: 0, dur: 1 }); break; }
       case 'leap': case 'blink': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
       case 'ghost': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '유령화', color: '#c9a6ff', t: 0, dur: 0.9 }); break; }
-      case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '수호천사', color: '#fff2b0', t: 0, dur: 1 }); break; }
+      case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '부활 중', color: '#fff2b0', t: 0, dur: 1 }); break; }
+      case 'laststand': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '최후의 저항!', color: '#ff8f5a', t: 0, dur: 1.2 }); break; }
+      case 'overtime': FX.texts.push({ x: VIEW.W / 2, y: VIEW.BOARD_H / 2, text: '⏱ 연장전 — 피해 증가', color: '#ffd84a', t: 0, dur: 1.8 }); break;
       case 'miss': { const p = pos(e.uid); if (p) FX.floats.push({ x: p[0], y: p[1] - 10, text: '회피', color: '#cccccc', size: 11, t: 0, dur: 0.6 }); break; }
     }
   }
@@ -2598,9 +2826,11 @@ function renderSpellBar() {
   const B = UI.battleView ? UI.battle : null;
   const S = B ? B.sides[0] : null;
   const lm = S ? S.lm : (hasAug(P, 'manaHead') ? 3 : 0);
+  const lmMax = S ? S.lmMax : (hasAug(P, 'manaVault') ? 14 : CFG.LORD_MANA_MAX);
   $('#lmVal').textContent = Math.floor(lm);
+  $('#lmMax').textContent = lmMax;
   const bar = $('#lmBar');
-  if (bar.children.length !== 10) bar.innerHTML = '<i><b></b></i>'.repeat(10);
+  if (bar.children.length !== lmMax) { bar.innerHTML = '<i><b></b></i>'.repeat(lmMax); bar.style.gridTemplateColumns = `repeat(${lmMax}, 1fr)`; }
   [...bar.children].forEach((el, i) => { el.firstChild.style.transform = `scaleX(${clamp(lm - i, 0, 1)})`; });
   const eq = S ? S.spells : equippedSpells(P);
   const html = eq.map((s, i) => {
@@ -2666,10 +2896,11 @@ function unitTooltip(defId, star, u, cu) {
         case 'stun': return `기절 ${v}초`;
         case 'slow': return `공속 -${pctS(v)}`;
         case 'burn': return `화상 초당 ${v}`;
-        case 'buff': return f.stat === 'as' ? `공속 +${pctS(v)}` : `방어 +${v}`;
+        case 'buff': return { as: `공속 +${pctS(v)}`, atk: `공격력 +${pctS(v)}`, armor: `방어 +${v}`, mr: `마저 +${v}` }[f.stat] + (f.tgt === 'allAllies' ? ' (아군 전체)' : '');
+        case 'mana': return `아군 마나 +${v}`;
         case 'leap': return '가장 먼 적에게 도약';
         case 'execute': return `체력 ${pctS(v)} 이하 처형`;
-        case 'summon': return `묘목 ${f.n}개 소환`;
+        case 'summon': return `${unitDef(f.unit).name} ${f.n}기 소환`;
       }
       return '';
     }).filter(Boolean).join(', ');
@@ -2698,7 +2929,7 @@ function traitTooltip(t) {
 }
 function spellTooltip(id, lvl) {
   const sp = SPELLS[id];
-  const next = lvl < 3 ? `<hr>다음 단계(${sp.up[lvl - 1]}🪙): ${spellDesc(id, lvl + 1)} · 마나 ${spellCost(id, lvl + 1)}` : '';
+  const next = lvl < 3 ? `<hr>다음 단계(${G ? spellUpCost(human(), { id, lvl }) : sp.up[lvl - 1]}🪙): ${spellDesc(id, lvl + 1)} · 마나 ${spellCost(id, lvl + 1)}` : '';
   return `<h4>${sp.icon} ${sp.name} ${'◆'.repeat(lvl)}</h4><div class="tt-sub">마나 ${spellCost(id, lvl)} · ${sp.once ? '전투당 1회' : '재사용 ' + sp.cd + '초'} · ${{ atk: '공격형', def: '방어형', ctl: '제어형' }[sp.kind]}</div>
     <div>${spellDesc(id, lvl)}</div>${next}`;
 }
@@ -2837,7 +3068,7 @@ function showSpellbook() {
     openModal(`<h2>📖 주문서</h2><p class="sub">장착 ${P.equipped.length}/${slots}칸 (레벨 7에 3칸) · 강화하면 효과가 오르거나 마나가 줄어듭니다. ${prep ? '' : '<b>전투 중에는 변경할 수 없습니다.</b>'}</p>
       ${P.spells.map((s, i) => {
         const sp = SPELLS[s.id], eq = P.equipped.includes(i);
-        const upCost = s.lvl < 3 ? sp.up[s.lvl - 1] : null;
+        const upCost = s.lvl < 3 ? spellUpCost(P, s) : null;
         return `<div class="spellbook-row ${eq ? 'eq' : ''}"><div class="si">${sp.icon}</div>
           <div><b>${sp.name}</b> <small>${'◆'.repeat(s.lvl)}${'◇'.repeat(3 - s.lvl)} · 마나 ${spellCost(s.id, s.lvl)} · ${sp.once ? '전투당 1회' : sp.cd + '초'}</small>
           <div class="sd">${spellDesc(s.id, s.lvl)}${upCost ? ` → <i>${spellDesc(s.id, s.lvl + 1)}</i>` : ''}</div>
@@ -2950,7 +3181,12 @@ function beginRound() {
     for (const P of G.players) if (P.alive && !P.isHuman) applyAugment(P, aiPickAugment(P, augmentOffers(P)));
     G.phase = 'augment';
     renderAll();
-    showAugmentPick(augmentOffers(human()), a => { applyAugment(human(), a); ready(); });
+    showAugmentPick(augmentOffers(human()), a => {
+      applyAugment(human(), a);
+      if (!G.pendingSpellPick) return ready();
+      G.pendingSpellPick = false;
+      showSpellPick(spellOffers(human(), 3), id => { if (id) addSpell(human(), id); ready(); });
+    });
   } else ready();
 }
 
@@ -3048,7 +3284,7 @@ function finishRound() {
       const dmg = won ? 0 : Math.max(1, base + survivorDamage(res.survivors[1]));
       applyResult(bt.a, won, dmg, false, '중립 몬스터');
       const rw = pveRewards(bt.a, won);
-      if (bt === mb) info = { won, dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw };
+      if (bt === mb) info = { won, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw };
     } else {
       const w = res.winner;
       const draw = res.timeout || w === -1;
@@ -3056,7 +3292,7 @@ function finishRound() {
       const dB = draw ? Math.max(1, base) : base + survivorDamage(res.survivors[0]);
       applyResult(bt.a, w === 0, dA, true, bt.b.name);
       if (!bt.ghost) applyResult(bt.b, w === 1, dB, true, bt.a.name);
-      if (bt === mb) info = { won: w === 0, dmg: dA, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost };
+      if (bt === mb) info = { won: w === 0, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost };
       else {
         const tag = draw ? '무승부' : `${(w === 0 ? bt.a : bt.b).emoji} 승`;
         others.push(`${bt.a.emoji} ${esc(bt.a.name)} vs ${bt.b.emoji} ${esc(bt.b.name)}${bt.ghost ? '(유령)' : ''} → ${tag}`);

@@ -57,7 +57,7 @@ function makePlayer(id, name, emoji, lordType, isHuman) {
     id, name, emoji, lordType, isHuman, hp: CFG.START_HP, gold: 0, level: 1, xp: 0,
     board: [], bench: new Array(CFG.BENCH).fill(null), shop: [null, null, null, null, null],
     items: [], spells: LORD_TYPES[lordType].spells.map(s => ({ id: s, lvl: 1, rule: 'off' })),
-    equipped: [0, 1], aug: [], streak: 0, alive: true, place: 0, freeRollUsed: false,
+    equipped: [0, 1], aug: [], streak: 0, alive: true, place: 0, freeRolls: 0, eggT: 0,
     lastResult: null, ai: null, history: [],
   };
 }
@@ -66,8 +66,9 @@ const human = () => G.players[0];
 const hasAug = (P, id) => P.aug.some(a => a.id === id);
 function boardLimit(P) { return P.level + (hasAug(P, 'bigBoard') ? 1 : 0); }
 function spellSlots(P) { return 2 + (P.level >= 7 ? 1 : 0) + (hasAug(P, 'spellSlot') ? 1 : 0); }
-function xpCost(P) { return CFG.XP_COST + (hasAug(P, 'spellSlot') ? 1 : 0); }
-function rerollCost(P) { return hasAug(P, 'freeRoll') && !P.freeRollUsed ? 0 : hasAug(P, 'cheapRoll') ? 1 : CFG.REROLL_COST; }
+function xpCost(P) { return CFG.XP_COST + (hasAug(P, 'spellSlot') ? 1 : 0) - (hasAug(P, 'cheapXp') ? 1 : 0); }
+function rerollCost(P) { return P.freeRolls > 0 ? 0 : hasAug(P, 'cheapRoll') ? 1 : CFG.REROLL_COST; }
+function spellUpCost(P, s) { return Math.max(1, SPELLS[s.id].up[s.lvl - 1] - (hasAug(P, 'apprentice') ? 2 : 0)); }
 function allUnits(P) { return [...P.board, ...P.bench.filter(Boolean)]; }
 function stageBaseDamage(stage) { return [0, 0, 2, 3, 5, 8, 10, 12, 15, 18][Math.min(stage, 9)]; }
 
@@ -76,7 +77,8 @@ function takeFromPool(id, n) { G.pool[id] = Math.max(0, (G.pool[id] || 0) - n); 
 function returnToPool(u) { if (UNITS[u.defId]) G.pool[u.defId] += 3 ** (u.star - 1); }
 
 function rollShop(P) {
-  const odds = SHOP_ODDS[P.level];
+  const odds = SHOP_ODDS[P.level].slice();
+  if (hasAug(P, 'highRoller')) { odds[1] += odds[0]; odds[0] = 0; }
   const r = R();
   for (let i = 0; i < 5; i++) {
     let id = null;
@@ -151,7 +153,7 @@ function removeUnit(P, u) {
 function sellPrice(u) { const c = UNITS[u.defId].cost; return u.star === 1 ? c : c * 3 ** (u.star - 1) - (c > 1 ? 1 : 0); }
 function sellUnit(P, u) {
   removeUnit(P, u);
-  P.gold += sellPrice(u);
+  P.gold += sellPrice(u) + (hasAug(P, 'broker') ? 1 : 0);
   P.items.push(...u.items);
   returnToPool(u);
 }
@@ -175,7 +177,7 @@ function reroll(P) {
   const c = rerollCost(P);
   if (P.gold < c) return false;
   P.gold -= c;
-  if (c === 0) P.freeRollUsed = true;
+  if (c === 0) P.freeRolls--;
   rollShop(P);
   return true;
 }
@@ -210,7 +212,7 @@ function toggleEquip(P, idx) {
 function upgradeSpell(P, idx) {
   const s = P.spells[idx];
   if (!s || s.lvl >= 3) return false;
-  const cost = SPELLS[s.id].up[s.lvl - 1];
+  const cost = spellUpCost(P, s);
   if (P.gold < cost) return false;
   P.gold -= cost;
   s.lvl++;
@@ -253,17 +255,37 @@ function applyAugment(P, a) {
     case 'heartyHP': P.hp += 20; break;
     case 'spellHone': for (const s of P.spells) s.lvl = Math.min(3, s.lvl + 1); break;
     case 'library': for (const id of spellOffers(P, 2)) addSpell(P, id); break;
-    case 'hire': {
-      for (let i = 0; i < 2; i++) {
-        const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === 3 && G.pool[k] > 0);
-        if (!ids.length || benchFree(P) < 0) break;
-        const id = r.pick(ids); takeFromPool(id, 1);
-        P.bench[benchFree(P)] = makeUnit(id, 1);
-      }
-      checkMerge(P);
+    case 'hire': for (let i = 0; i < 2; i++) grantRandomUnit(P, 3, 1); break;
+    case 'treasure': P.gold += 30; P.hp -= 10; break;
+    case 'goldenEgg': P.eggT = 4; break;
+    case 'xpBoost': if (P.level < 9) addXp(P, XP_TABLE[P.level] - P.xp); break;
+    case 'itemSmith': P.items.push(itemKey(r.pick(COMP_KEYS), r.pick(COMP_KEYS))); break;
+    case 'tripleContract': {
+      const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === 1 && G.pool[k] >= 3);
+      if (ids.length) { const id = r.pick(ids); takeFromPool(id, 3); placeNewUnit(P, makeUnit(id, 2)); }
       break;
     }
+    case 'legendCall': grantRandomUnit(P, 4, 1); break;
+    case 'freeSpell':
+      if (P.isHuman) G.pendingSpellPick = true;
+      else { const ids = spellOffers(P, 3); if (ids.length) addSpell(P, aiPickSpell(P, ids)); }
+      break;
   }
+}
+// 대기석에 빈 칸이 없으면 유닛을 풀로 돌려보내고 그 가치를 골드로 준다
+function placeNewUnit(P, u) {
+  const f = benchFree(P);
+  if (f >= 0) { P.bench[f] = u; checkMerge(P); return true; }
+  returnToPool(u);
+  P.gold += sellPrice(u);
+  return false;
+}
+function grantRandomUnit(P, cost, star) {
+  const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === cost && G.pool[k] > 0);
+  if (!ids.length) return;
+  const id = R().pick(ids);
+  takeFromPool(id, 1);
+  placeNewUnit(P, makeUnit(id, star));
 }
 
 /* ---------- 라운드 구성 ---------- */
@@ -291,11 +313,14 @@ function streakBonus(P) {
 function startPrep() {
   for (const P of G.players) {
     if (!P.alive) continue;
-    const inc = CFG.BASE_INCOME + interest(P) + streakBonus(P) + (hasAug(P, 'income') ? 1 : 0);
+    const inc = CFG.BASE_INCOME + interest(P) + streakBonus(P) + (hasAug(P, 'income') ? 1 : 0)
+      + (hasAug(P, 'patience') && P.streak < 0 ? 2 : 0);
     P.gold += inc;
     P.lastIncome = inc;
     if (G.roundsPlayed > 0) addXp(P, 2 + (hasAug(P, 'scholar') ? 2 : 0));
-    P.freeRollUsed = false;
+    P.freeRolls = (hasAug(P, 'freeRoll') ? 1 : 0) + (hasAug(P, 'rerollMaster') ? 2 : 0);
+    if (P.eggT > 0 && --P.eggT === 0) { P.gold += 35; if (P.isHuman) toast('🥚 황금알 부화! +35골드', 'gold'); }
+    if (hasAug(P, 'supply') && G.roundsPlayed % 2 === 0) P.items.push(R().pick(COMP_KEYS));
     rollShop(P);
   }
 }
@@ -349,8 +374,10 @@ function survivorDamage(list) { return sum(list.map(s => s.star + (s.cost >= 4 ?
 function applyResult(P, won, dmg, pvp, oppName) {
   if (won) {
     if (pvp) P.streak = P.streak > 0 ? P.streak + 1 : 1;
+    if (pvp && hasAug(P, 'victoryGold')) P.gold += 2;
   } else {
     if (pvp) P.streak = P.streak < 0 ? P.streak - 1 : -1;
+    if (hasAug(P, 'ironWill')) dmg = Math.max(1, Math.round(dmg * 0.75));
     P.hp -= dmg;
   }
   P.lastResult = { won, dmg: won ? 0 : dmg, opp: oppName };

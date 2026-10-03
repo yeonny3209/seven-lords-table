@@ -74,7 +74,7 @@ function aiPrep(P) {
   if (G.stage >= 2) for (const i of P.equipped) {
     const s = P.spells[i];
     if (!s || s.lvl >= 3) continue;
-    const c = SPELLS[s.id].up[s.lvl - 1];
+    const c = spellUpCost(P, s);
     if (P.gold - c >= reserve && r.chance(p.spell * 0.6)) upgradeSpell(P, i);
   }
   // 레벨
@@ -223,7 +223,8 @@ function aiPickAugment(P, offers) {
   const p = P.ai.p, r = R();
   const w = offers.map(a => {
     if (AUGMENTS[a.id].spell) return 1 + p.spell * 3;
-    if (['income', 'bigInterest', 'cash'].includes(a.id)) return 1 + p.econ * 3;
+    if (AUGMENTS[a.id].econ || ['income', 'bigInterest', 'cash'].includes(a.id)) return 1 + p.econ * 3;
+    if (AUGMENTS[a.id].reroll) return 1 + p.reroll * 3;
     if (a.id === 'emblem') return 1 + p.commit * 2;
     return 1.6;
   });

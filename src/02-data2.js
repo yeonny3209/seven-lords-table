@@ -132,7 +132,7 @@ const LORD_TYPES = {
   tactic: { name: '책략 군주', icon: '♟️', spells: ['swap', 'frostward'],  passive: '전투의 첫 주문 마나 비용 -2',   desc: '위치·제어형 주문으로 전장을 뒤흔든다.' },
 };
 
-/* ---------- 증강 (30종, 주문 관련 8종) ---------- */
+/* ---------- 증강 (80종, 주문 관련 16종) ---------- */
 const AUGMENTS = {
   income:      { name: '영지 세금',      icon: '💰', desc: '매 라운드 골드 +1' },
   emblem:      { name: '계열 문장',      icon: '🎖️', desc: '{trait} 시너지 요구 인원 -1', param: 'trait' },
@@ -165,6 +165,60 @@ const AUGMENTS = {
   sacrifice:   { name: '희생의 메아리',  icon: '🕊️', desc: '아군이 처치될 때 군주 마나 +2 (기본 +1)', spell: true },
   spellAmp:    { name: '주문 증폭',      icon: '📡', desc: '모든 주문 효과 +20%', spell: true },
   quickCast:   { name: '신속 시전',      icon: '⏱️', desc: '주문 재사용 대기 시간 -30%', spell: true },
+  // ═════ 확장 증강 50종 (주문 관련 8종) ═════
+  // 경제·운영
+  treasure:      { name: '보물 창고',      icon: '🏺', desc: '즉시 30골드 획득, 대신 군주 체력 -10', econ: true },
+  goldenEgg:     { name: '황금알',         icon: '🥚', desc: '4라운드 뒤 부화해 35골드 획득', econ: true },
+  xpBoost:       { name: '속성 교육',      icon: '🎓', desc: '즉시 레벨 +1' },
+  cheapXp:       { name: '할인 교관',      icon: '🏷️', desc: '경험치 구매 비용 -1골드' },
+  itemSmith:     { name: '대장장이',       icon: '⚒', desc: '즉시 무작위 완성 아이템 1개 획득' },
+  supply:        { name: '보급 행렬',      icon: '📦', desc: '2라운드마다 재료 아이템 1개 획득' },
+  patience:      { name: '인내의 미덕',    icon: '🧘', desc: '연패 중이면 매 라운드 골드 +2', econ: true },
+  victoryGold:   { name: '전리품 사냥',    icon: '🏆', desc: '대전에서 이길 때마다 골드 +2', econ: true },
+  broker:        { name: '중개상',         icon: '🤝', desc: '유닛을 판매할 때마다 골드 +1', econ: true },
+  highRoller:    { name: '고급 상점',      icon: '💎', desc: '상점에 1코스트 유닛이 나오지 않고 그만큼 2코스트가 나옴' },
+  rerollMaster:  { name: '리롤 장인',      icon: '🎲', desc: '매 라운드 새로고침 2회 무료', reroll: true },
+  ironWill:      { name: '강철 의지',      icon: '🪨', desc: '패배 시 군주가 받는 피해 -25%' },
+  tripleContract:{ name: '3인 계약',       icon: '👥', desc: '즉시 같은 1코스트 유닛 3개(★2) 획득', reroll: true },
+  legendCall:    { name: '전설의 부름',    icon: '📯', desc: '즉시 무작위 4코스트 유닛 1개 획득' },
+  // 전투
+  ambush:        { name: '기습',           icon: '🌫️', desc: '암살자 유닛이 전투 시작 시 적 후열로 도약' },
+  firstStrike:   { name: '선공',           icon: '🏃', desc: '전투 시작 4초간 모든 아군 공격 속도 +40%' },
+  lastStand:     { name: '최후의 저항',    icon: '🚩', desc: '아군이 3명 이하로 줄면 남은 아군 공격력 +35%' },
+  thornsAll:     { name: '가시 덩굴',      icon: '🌵', desc: '모든 아군이 피격 시 공격자에게 마법 피해 12' },
+  spellVampAll:  { name: '흡혈 마법',      icon: '🩸', desc: '모든 아군이 스킬 피해의 15% 회복' },
+  manaFlow:      { name: '마나 흐름',      icon: '🌊', desc: '모든 아군 공격 시 마나 +3 추가' },
+  tankShield:    { name: '수호 결계',      icon: '🛡', desc: '앞줄 유닛 전투 시작 보호막 300' },
+  backShield:    { name: '후방 장막',      icon: '🧱', desc: '뒤쪽 2줄 유닛 전투 시작 보호막 220' },
+  giantSlayer:   { name: '거인 사냥꾼',    icon: '🪓', desc: '최대 체력 1500 이상인 적에게 주는 피해 +25%' },
+  executioner:   { name: '처형인',         icon: '⚖️', desc: '체력 35% 이하인 적에게 주는 피해 +25%' },
+  eliteFew:      { name: '소수 정예',      icon: '🎖', desc: '보드 유닛이 5명 이하면 모든 아군 체력·공격력 +25%' },
+  commonPower:   { name: '서민의 힘',      icon: '✊', desc: '1·2코스트 유닛 체력·공격력 +20%' },
+  nobleBlood:    { name: '귀족의 혈통',    icon: '🍷', desc: '4·5코스트 유닛 스킬 피해 +30%' },
+  precision:     { name: '치명적 정밀',    icon: '🎯', desc: '모든 아군 치명타 피해 +35%' },
+  armorPierce:   { name: '갑옷 관통',      icon: '🔩', desc: '모든 아군 공격이 대상 방어력 35% 무시' },
+  magicPierce:   { name: '마법 관통',      icon: '🔮', desc: '모든 아군 스킬이 대상 마법 저항 35% 무시' },
+  arsonist:      { name: '방화범',         icon: '🧨', desc: '모든 아군 공격 시 대상에게 화상 (초당 12, 3초)' },
+  stunStart:     { name: '기선 제압',      icon: '💥', desc: '전투 시작 시 무작위 적 2명 1.5초 기절' },
+  reinforce:     { name: '증원군',         icon: '💂', desc: '전투 시작 시 강철 병사 2기 소환' },
+  legion:        { name: '망자의 군단',    icon: '⚰️', desc: '처치된 모든 아군이 2초간 유령으로 공격 (피해 50%)' },
+  phoenixFeather:{ name: '불사조의 깃털',  icon: '🪶', desc: '전투마다 처음 쓰러진 아군 1명이 체력 50%로 부활' },
+  killHeal:      { name: '승리의 함성',    icon: '🎺', desc: '적을 처치한 유닛이 최대 체력 25% 회복' },
+  soulDrink:     { name: '영혼 흡수',      icon: '👻', desc: '적을 처치한 유닛 마나 +40' },
+  accelerate:    { name: '가속',           icon: '⏩', desc: '전투 중 매 초 모든 아군 공격 속도 +3%' },
+  phalanx:       { name: '중앙 집결',      icon: '🏛', desc: '가운데 3열 유닛 방어력·마법 저항 +25' },
+  flanking:      { name: '측면 기동',      icon: '↔️', desc: '양쪽 끝 2열 유닛 공격 속도 +20%' },
+  mercy:         { name: '자비',           icon: '🤲', desc: '아군이 받는 회복·보호막 효과 +25%' },
+  oath:          { name: '수호 맹세',      icon: '🗿', desc: '체력이 가장 높은 아군이 전투 시작 4초간 주변 적 도발' },
+  // 주문 관련 8종
+  freeSpell:     { name: '주문 계시',      icon: '📜', desc: '즉시 새 주문 1장 선택', spell: true },
+  apprentice:    { name: '견습 마법사',    icon: '🧑‍🎓', desc: '주문 강화 비용 -2골드 (최소 1)', spell: true },
+  echo:          { name: '연쇄 시전',      icon: '🔂', desc: '주문을 시전할 때마다 군주 마나 1 반환', spell: true },
+  discount:      { name: '주문 할인',      icon: '🪙', desc: '모든 주문 마나 비용 -1 (최소 1)', spell: true },
+  secondChance:  { name: '두 번째 기회',   icon: '♻️', desc: '전투당 1회 주문을 2회까지 사용', spell: true },
+  grace:         { name: '은총의 주문',    icon: '😇', desc: '아군 대상 주문이 대상 체력도 15% 회복', spell: true },
+  huntMana:      { name: '사냥의 마나',    icon: '🏹', desc: '적을 처치할 때마다 군주 마나 +1', spell: true },
+  manaVault:     { name: '마나 저장고',    icon: '🫙', desc: '군주 마나 최대치 14', spell: true },
 };
 const AUG_KEYS = Object.keys(AUGMENTS);
 

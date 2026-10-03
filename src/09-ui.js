@@ -75,9 +75,11 @@ function renderSpellBar() {
   const B = UI.battleView ? UI.battle : null;
   const S = B ? B.sides[0] : null;
   const lm = S ? S.lm : (hasAug(P, 'manaHead') ? 3 : 0);
+  const lmMax = S ? S.lmMax : (hasAug(P, 'manaVault') ? 14 : CFG.LORD_MANA_MAX);
   $('#lmVal').textContent = Math.floor(lm);
+  $('#lmMax').textContent = lmMax;
   const bar = $('#lmBar');
-  if (bar.children.length !== 10) bar.innerHTML = '<i><b></b></i>'.repeat(10);
+  if (bar.children.length !== lmMax) { bar.innerHTML = '<i><b></b></i>'.repeat(lmMax); bar.style.gridTemplateColumns = `repeat(${lmMax}, 1fr)`; }
   [...bar.children].forEach((el, i) => { el.firstChild.style.transform = `scaleX(${clamp(lm - i, 0, 1)})`; });
   const eq = S ? S.spells : equippedSpells(P);
   const html = eq.map((s, i) => {
@@ -143,10 +145,11 @@ function unitTooltip(defId, star, u, cu) {
         case 'stun': return `기절 ${v}초`;
         case 'slow': return `공속 -${pctS(v)}`;
         case 'burn': return `화상 초당 ${v}`;
-        case 'buff': return f.stat === 'as' ? `공속 +${pctS(v)}` : `방어 +${v}`;
+        case 'buff': return { as: `공속 +${pctS(v)}`, atk: `공격력 +${pctS(v)}`, armor: `방어 +${v}`, mr: `마저 +${v}` }[f.stat] + (f.tgt === 'allAllies' ? ' (아군 전체)' : '');
+        case 'mana': return `아군 마나 +${v}`;
         case 'leap': return '가장 먼 적에게 도약';
         case 'execute': return `체력 ${pctS(v)} 이하 처형`;
-        case 'summon': return `묘목 ${f.n}개 소환`;
+        case 'summon': return `${unitDef(f.unit).name} ${f.n}기 소환`;
       }
       return '';
     }).filter(Boolean).join(', ');
@@ -175,7 +178,7 @@ function traitTooltip(t) {
 }
 function spellTooltip(id, lvl) {
   const sp = SPELLS[id];
-  const next = lvl < 3 ? `<hr>다음 단계(${sp.up[lvl - 1]}🪙): ${spellDesc(id, lvl + 1)} · 마나 ${spellCost(id, lvl + 1)}` : '';
+  const next = lvl < 3 ? `<hr>다음 단계(${G ? spellUpCost(human(), { id, lvl }) : sp.up[lvl - 1]}🪙): ${spellDesc(id, lvl + 1)} · 마나 ${spellCost(id, lvl + 1)}` : '';
   return `<h4>${sp.icon} ${sp.name} ${'◆'.repeat(lvl)}</h4><div class="tt-sub">마나 ${spellCost(id, lvl)} · ${sp.once ? '전투당 1회' : '재사용 ' + sp.cd + '초'} · ${{ atk: '공격형', def: '방어형', ctl: '제어형' }[sp.kind]}</div>
     <div>${spellDesc(id, lvl)}</div>${next}`;
 }

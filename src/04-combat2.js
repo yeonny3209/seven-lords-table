@@ -16,7 +16,7 @@ function stepBattle(B) {
 
   // 1) 군주 마나, 주문 재사용 대기, 입력된 주문 이벤트, 자동/AI 시전
   for (const S of B.sides) {
-    S.lm = Math.min(CFG.LORD_MANA_MAX, S.lm + CFG.LORD_MANA_REGEN * S.lmRegen * dt);
+    S.lm = Math.min(S.lmMax, S.lm + CFG.LORD_MANA_REGEN * S.lmRegen * dt);
     for (const sl of S.spells) if (sl.cd > 0) sl.cd = Math.max(0, sl.cd - dt);
   }
   const q = B.queue; B.queue = [];
@@ -63,7 +63,7 @@ function runBattle(specA, specB, seed) {
 function updateUnit(B, u, dt, dot) {
   if (u.reviving > 0) {
     u.reviving -= dt;
-    if (u.reviving <= 0) { u.alive = true; u.hp = Math.min(u.maxHp, 400); emit(B, { t: 'revive', uid: u.uid }); }
+    if (u.reviving <= 0) { u.alive = true; u.hp = Math.min(u.maxHp, u.reviveHp); emit(B, { t: 'revive', uid: u.uid }); }
     return;
   }
   if (u.ghost > 0) {
@@ -85,6 +85,7 @@ function updateUnit(B, u, dt, dot) {
       if (u.burn && (u.burn.t -= 0.5) <= 0) u.burn = null;
     }
     if (u.regen && u.alive) healUnit(B, null, u, u.maxHp * u.regen * 0.5, true);
+    if (u.asRamp) u.asBonus += 0.015;
     if (u.fx.has('frostAura')) for (const e of enemiesOf(B, u.side)) if (cheb(e.r, e.c, u.r, u.c) <= 2) applySlow(B, e, 0.25, 0.6);
   }
   if (!u.alive) return;
@@ -172,10 +173,10 @@ function attack(B, u, t, dist) {
   if (crit) dmg *= u.critDmg;
   emit(B, { t: 'atk', uid: u.uid, tuid: t.uid, ranged: u.range > 1 });
   dealDamage(B, u, t, dmg, 'phys', { attack: true, crit });
-  u.mana = Math.min(u.manaMax, u.mana + 10 + (u.fx.has('manaHit') ? 6 : 0));
+  u.mana = Math.min(u.manaMax, u.mana + 10 + u.manaPerAtk);
   if (u.fx.has('asRamp')) u.asStacks = Math.min(10, u.asStacks + 1);
   if (u.frostSlow) applySlow(B, t, u.frostSlow, 2, false);
-  if (u.fx.has('burnHit')) applyBurn(B, t, 20, 3);
+  if (u.burnHitDps) applyBurn(B, t, u.burnHitDps, 3);
   if (u.fx.has('zap') && u.atkCount % 3 === 0) {
     const others = enemiesOf(B, u.side).filter(e => e !== t).sort((a, b) => cheb(a.r, a.c, t.r, t.c) - cheb(b.r, b.c, t.r, t.c)).slice(0, 2);
     for (const e of [t, ...others]) { emit(B, { t: 'zap', uid: u.uid, tuid: e.uid }); dealDamage(B, u, e, 70, 'magic', { skill: true }); }
@@ -261,6 +262,7 @@ function runSkillFx(B, ctx, fx) {
       case 'heal': healUnit(B, u, tg, v * ctx.mult); break;
       case 'shield': addShield(B, tg, v * ctx.mult, fx.dur || 4, u); break;
       case 'buff': addBuff(tg, fx.stat, v, fx.dur || 4); break;
+      case 'mana': if (tg !== u && tg.d.skill) tg.mana = Math.min(tg.manaMax, tg.mana + v); break;
       case 'execute':
         if (tg.hp / tg.maxHp <= v && tg.undying <= 0) { emit(B, { t: 'execute', uid: tg.uid }); dealDamage(B, u, tg, tg.hp + sum(tg.shields.map(s => s.amt)) + 1, 'true', { skill: true }); }
         break;

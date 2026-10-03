@@ -40,8 +40,10 @@ function makeSideState(spec, idx) {
   const S = {
     idx, spec, name: spec.name, emoji: spec.emoji, isPlayer: !!spec.isPlayer, tiers, aug,
     lordType: spec.lordType, lm: aug.has('manaHead') ? 3 : 0,
+    lmMax: aug.has('manaVault') ? 14 : CFG.LORD_MANA_MAX,
     lmRegen: (tiers.star === 3 ? 1.6 : 1) * (aug.has('manaSpring') ? 1.3 : 1),
-    healAmp: 1 + [0, 0.25, 0.5, 0.9][tiers.healer],
+    healAmp: (1 + [0, 0.25, 0.5, 0.9][tiers.healer]) * (aug.has('mercy') ? 1.25 : 1),
+    phoenixUsed: false, lastStandDone: false,
     spellDmgMult: 1 + (spec.lordType === 'war' ? 0.15 : 0) + [0, 0, 0.15, 0.3][tiers.mystic],
     spellMult: aug.has('spellAmp') ? 1.2 : 1,
     spells: (spec.spells || []).map(s => ({ id: s.id, lvl: s.lvl, rule: s.rule || 'off', cd: 0, used: false })),
@@ -65,6 +67,8 @@ function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
     slows: [], buffs: [], shields: [],
     target: null, atkCd: 0.25 + B.rng.next() * 0.35, moveCd: 0, moveDur: CFG.MOVE_TIME, retargetT: 0,
     atkCount: 0, asStacks: 0, fireBurn: 0, frostSlow: 0, distAmp: 0, leap: false, leapStun: false,
+    thornDmg: 0, spellVamp: 0, manaPerAtk: 0, armorPen: 0, mrPen: 0, giantAmp: 0, execAmp: 0,
+    burnHitDps: 0, asRamp: false, startShield: 0, reviveHp: 400,
     dmgDone: 0, dmgTaken: 0, healDone: 0, summon: !!d.summon, monster: defId.startsWith('m_'),
   };
   // 아이템
@@ -81,6 +85,10 @@ function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
   if (u.fx.has('dmgAmp')) u.dmgAmp += 0.15;
   if (u.fx.has('regen')) u.regen += 0.03;
   if (u.fx.has('revive')) u.revive = true;
+  if (u.fx.has('thorns')) u.thornDmg += 25;
+  if (u.fx.has('spellVamp')) u.spellVamp += 0.2;
+  if (u.fx.has('manaHit')) u.manaPerAtk += 6;
+  if (u.fx.has('burnHit')) u.burnHitDps = 20;
   applyTraitBonuses(S, u);
   // 증강
   const A = S.aug;
@@ -94,6 +102,26 @@ function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
   if (A.has('swift')) u.asBonus += 0.15;
   if (A.has('giant')) u.maxHp *= 1.12;
   if (A.has('lifesteal')) u.lifesteal += 0.10;
+  // 확장 증강
+  const cost = d.cost || 0;
+  if (A.has('commonPower') && cost >= 1 && cost <= 2) { u.maxHp *= 1.2; u.atk *= 1.2; }
+  if (A.has('nobleBlood') && cost >= 4) u.ap += 30;
+  if (A.has('eliteFew') && S.spec.units.length <= 5) { u.maxHp *= 1.25; u.atk *= 1.25; }
+  if (A.has('precision')) u.critDmg += 0.35;
+  if (A.has('thornsAll')) u.thornDmg += 12;
+  if (A.has('spellVampAll')) u.spellVamp += 0.15;
+  if (A.has('manaFlow')) u.manaPerAtk += 3;
+  if (A.has('armorPierce')) u.armorPen = 0.35;
+  if (A.has('magicPierce')) u.mrPen = 0.35;
+  if (A.has('giantSlayer')) u.giantAmp = 0.25;
+  if (A.has('executioner')) u.execAmp = 0.25;
+  if (A.has('arsonist')) u.burnHitDps = Math.max(u.burnHitDps, 12);
+  if (A.has('accelerate')) u.asRamp = true;
+  if (A.has('tankShield') && localRow === 0) u.startShield += 300;
+  if (A.has('backShield') && localRow >= 2) u.startShield += 220;
+  if (A.has('phalanx') && gc >= 2 && gc <= 4) { u.armor += 25; u.mr += 25; }
+  if (A.has('flanking') && (gc <= 1 || gc >= 5)) u.asBonus += 0.2;
+  if (A.has('legion')) { u.ghostT = Math.max(u.ghostT, 2); u.ghostMult = Math.max(u.ghostMult, 0.5); }
   u.hp = u.maxHp;
   u.crit = Math.min(u.crit, 1);
   B.units.push(u);
@@ -124,9 +152,34 @@ function applyTraitBonuses(S, u) {
 }
 
 function startEffects(B) {
+  // 증원군: 자기 진영 앞쪽 빈 칸에 강철 병사 소환
+  for (const S of B.sides) if (S.aug.has('reinforce')) {
+    for (let i = 0; i < 2; i++) {
+      const free = [];
+      for (let r = 0; r < CFG.ROWS; r++) for (let c = 0; c < CFG.COLS; c++) {
+        const [gr, gc] = toGlobal(S.idx, r, c);
+        if (!B.occ[gr][gc]) free.push([gr, gc, r]);
+      }
+      if (!free.length) break;
+      free.sort((a, b) => a[2] - b[2] || Math.abs(a[1] - 3) - Math.abs(b[1] - 3));
+      const [gr, gc] = free[0];
+      spawnUnit(B, S.idx, 'militia', 1, [], gr, gc, 0);
+    }
+  }
   for (const u of B.units) {
     if (u.mechShield) addShield(B, u, u.mechShield, 999, null);
+    if (u.startShield) addShield(B, u, u.startShield, 999, null);
     if (u.fx.has('locket')) for (const a of alliesOf(B, u.side)) if (cheb(a.r, a.c, u.r, u.c) <= 1) addShield(B, a, 200, 8, null);
+  }
+  for (const S of B.sides) {
+    const mine = alliesOf(B, S.idx);
+    if (S.aug.has('firstStrike')) for (const u of mine) addBuff(u, 'as', 0.4, 4);
+    if (S.aug.has('oath') && mine.length) {
+      const tank = mine.reduce((a, b) => (b.maxHp > a.maxHp ? b : a));
+      tank.taunt = 4; addBuff(tank, 'armor', 30, 4);
+    }
+    if (S.aug.has('stunStart')) for (const e of B.rng.shuffle(enemiesOf(B, S.idx)).slice(0, 2)) applyStun(B, e, 1.5);
+    if (S.aug.has('ambush')) for (const u of mine) if (u.traits.includes('assassin')) u.leap = true;
   }
   for (const u of B.units) if (u.leap) {
     const far = farthestFrom(B, u, enemiesOf(B, u.side));
@@ -207,10 +260,14 @@ function dealDamage(B, src, tgt, raw, kind, o = {}) {
   if (!targetable(tgt) || raw <= 0) return 0;
   if (o.attack && tgt.fx.has('dodge') && B.rng.chance(0.2)) { emit(B, { t: 'miss', uid: tgt.uid }); return 0; }
   let d = raw;
-  if (src) d *= 1 + src.dmgAmp;
+  if (src) {
+    d *= 1 + src.dmgAmp;
+    if (src.giantAmp && tgt.maxHp >= 1500) d *= 1 + src.giantAmp;
+    if (src.execAmp && tgt.hp <= tgt.maxHp * 0.35) d *= 1 + src.execAmp;
+  }
   if (kind !== 'true') d *= B.amp;
-  if (kind === 'phys') d *= 100 / (100 + Math.max(0, effArmor(tgt)));
-  else if (kind === 'magic') d *= 100 / (100 + Math.max(0, effMr(tgt)));
+  if (kind === 'phys') d *= 100 / (100 + Math.max(0, effArmor(tgt) * (1 - (src ? src.armorPen : 0))));
+  else if (kind === 'magic') d *= 100 / (100 + Math.max(0, effMr(tgt) * (1 - (src && o.skill ? src.mrPen : 0))));
   if (tgt.sunder) d *= 1 + tgt.sunder.amp;
   let left = d;
   for (const s of tgt.shields) { const a = Math.min(s.amt, left); s.amt -= a; left -= a; if (left <= 0) break; }
@@ -224,16 +281,21 @@ function dealDamage(B, src, tgt, raw, kind, o = {}) {
   emit(B, { t: 'dmg', uid: tgt.uid, a: d, crit: !!o.crit, kind, spell: o.spellSide != null });
   if (src && targetable(src)) {
     if (o.attack && src.lifesteal) healUnit(B, src, src, d * src.lifesteal, true);
-    if (o.skill && src.fx.has('spellVamp')) healUnit(B, src, src, d * 0.2, true);
+    if (o.skill && src.spellVamp) healUnit(B, src, src, d * src.spellVamp, true);
     if (o.attack && tgt.fireBurn) applyBurn(B, src, tgt.fireBurn, 3);
-    if (o.attack && tgt.fx.has('thorns') && !o.reflect) dealDamage(B, tgt, src, 25, 'magic', { reflect: true });
+    if (o.attack && tgt.thornDmg && !o.reflect) dealDamage(B, tgt, src, tgt.thornDmg, 'magic', { reflect: true });
   }
-  if (tgt.hp <= 0) onLethal(B, tgt);
+  if (tgt.hp <= 0) onLethal(B, tgt, src);
   return d;
 }
 
-function onLethal(B, u) {
+function onLethal(B, u, killer) {
   if (u.undying > 0) { u.hp = 1; return; }
+  const S = B.sides[u.side];
+  // 불사조의 깃털: 전투마다 처음 쓰러진 아군 1명 부활
+  if (!u.revive && !u.summon && S.aug.has('phoenixFeather') && !S.phoenixUsed) {
+    S.phoenixUsed = true; u.revive = true; u.reviveHp = u.maxHp * 0.5;
+  }
   if (u.revive) {
     u.revive = false; u.alive = false; u.reviving = 1; u.hp = 0;
     u.shields = []; u.burn = null;
@@ -243,9 +305,25 @@ function onLethal(B, u) {
   u.alive = false; u.hp = 0; u.shields = []; u.burn = null;
   B.occ[u.r][u.c] = 0;
   emit(B, { t: 'death', uid: u.uid });
-  const S = B.sides[u.side];
-  if (!u.summon) S.lm = Math.min(CFG.LORD_MANA_MAX, S.lm + (S.aug.has('sacrifice') ? 2 : 1));
+  if (!u.summon) S.lm = Math.min(S.lmMax, S.lm + (S.aug.has('sacrifice') ? 2 : 1));
   if (u.ghostT > 0 && !u.summon) { u.ghost = u.ghostT; emit(B, { t: 'ghost', uid: u.uid }); }
+  // 처치한 쪽 효과
+  if (killer && killer.side !== u.side) {
+    const KS = B.sides[killer.side];
+    if (KS.aug.has('huntMana')) KS.lm = Math.min(KS.lmMax, KS.lm + 1);
+    if (targetable(killer)) {
+      if (KS.aug.has('killHeal')) healUnit(B, killer, killer, killer.maxHp * 0.25, true);
+      if (KS.aug.has('soulDrink') && killer.d.skill) killer.mana = Math.min(killer.manaMax, killer.mana + 40);
+    }
+  }
+  // 최후의 저항: 남은 아군이 3명 이하가 되면
+  if (S.aug.has('lastStand') && !S.lastStandDone) {
+    const left = alliesOf(B, u.side).filter(x => !x.summon);
+    if (left.length && left.length <= 3) {
+      S.lastStandDone = true;
+      for (const a of left) { addBuff(a, 'atk', 0.35, 99); emit(B, { t: 'laststand', uid: a.uid }); }
+    }
+  }
 }
 
 function healUnit(B, src, tgt, amt, raw) {

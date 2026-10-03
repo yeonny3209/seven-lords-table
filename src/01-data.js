@@ -126,6 +126,62 @@ const UNIT_LIST = [
   ['winterqueen','겨울 여왕',   '👸', 5, 'frost',  ['mystic'],   { name: '영원한 겨울', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [260, 390, 2000] }, { t: 'stun', tgt: 'allEnemies', v: [1.5, 2, 6] }] }],
   ['worldtree',  '세계수',      '🌳', 5, 'forest', ['healer'],   { name: '숲의 부름', fx: [{ t: 'summon', unit: 'sapling', n: 2 }, { t: 'heal', tgt: 'allAllies', v: [160, 240, 1000] }] }],
   ['lich',       '리치 왕',     '💀', 5, 'wraith', ['mystic'],   { name: '죽음의 손길', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [520, 780, 3000] }] }],
+  // ═════ 확장 유닛 50종 (코스트별 10종) ═════
+  // ── 1코스트 확장 (10)
+  ['cinderfox',  '불씨 여우',   '🦊', 1, 'fire',   ['assassin'], { name: '불씨 할퀴기', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [190, 285, 440] }, { t: 'burn', tgt: 'target', v: [15, 25, 40], dur: 3 }] }],
+  ['steelcrab',  '강철 게',     '🦀', 1, 'mech',   ['guardian'], { name: '집게 방벽', fx: [{ t: 'shield', tgt: 'self', v: [280, 400, 620], dur: 4 }, { t: 'slow', tgt: 'selfArea', r: 1, v: [0.25, 0.3, 0.4], dur: 2 }] }],
+  ['penguin',    '펭귄 척후병', '🐧', 1, 'frost',  ['vanguard'], { name: '얼음 미끄럼', fx: [{ t: 'dmg', tgt: 'target', v: [150, 225, 350] }, { t: 'slow', tgt: 'target', v: [0.3, 0.35, 0.45], dur: 3 }] }],
+  ['bee',        '꿀벌 치유사', '🐝', 1, 'forest', ['healer'],   { name: '꿀 한 방울', fx: [{ t: 'heal', tgt: 'lowestAlly', v: [210, 315, 500] }, { t: 'buff', tgt: 'lowestAlly', stat: 'armor', v: [20, 30, 50], dur: 3 }] }],
+  ['hedgehog',   '고슴도치 궁수', '🦔', 1, 'forest', ['sniper'], { name: '가시 사격', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [190, 285, 450] }] }],
+  ['wisp',       '도깨비불',    '🕯️', 1, 'wraith', ['mystic'],   { name: '혼불 폭발', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [140, 210, 330] }] }],
+  ['crow',       '까마귀 정찰병', '🐦', 1, 'wraith', ['sniper'], { name: '사냥감 표시', fx: [{ t: 'dmg', tgt: 'lowestEnemy', v: [180, 270, 420] }] }],
+  ['gearsmith',  '톱니 기술자', '🧑‍🔧', 1, 'mech', ['healer'],   { name: '응급 용접', fx: [{ t: 'shield', tgt: 'lowestAlly', v: [230, 340, 520], dur: 4 }] }],
+  ['robodog',    '로봇 강아지', '🐶', 1, 'mech',   ['vanguard'], { name: '전기 물기', fx: [{ t: 'dmg', tgt: 'target', v: [150, 225, 350] }, { t: 'stun', tgt: 'target', v: [0.75, 1, 1.25] }] }],
+  ['moth',       '달빛 나방',   '🦋', 1, 'star',   ['assassin'], { name: '달빛 비행', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'target', v: [170, 255, 400] }] }],
+  // ── 2코스트 확장 (10)
+  ['fireknight', '화염 기사',   '🤺', 2, 'fire',   ['guardian'], { name: '불꽃 방패', fx: [{ t: 'shield', tgt: 'self', v: [360, 520, 820], dur: 4 }, { t: 'burn', tgt: 'selfArea', r: 1, v: [20, 30, 45], dur: 3 }] }],
+  ['lamppriest', '등불 사제',   '🪔', 2, 'fire',   ['healer'],   { name: '따스한 불빛', fx: [{ t: 'heal', tgt: 'allAllies', v: [90, 135, 210] }] }],
+  ['lynx',       '빙하 살쾡이', '🐈', 2, 'frost',  ['assassin'], { name: '눈보라 발톱', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [250, 375, 580] }, { t: 'slow', tgt: 'target', v: [0.35, 0.4, 0.5], dur: 2 }] }],
+  ['frostowl',   '설원 올빼미', '🦉', 2, 'frost',  ['sniper'],   { name: '얼음 깃털', fx: [{ t: 'dmg', tgt: 'target', v: [240, 360, 560] }, { t: 'slow', tgt: 'target', v: [0.35, 0.4, 0.5], dur: 3 }] }],
+  ['mantis',     '사마귀 검객', '🦗', 2, 'forest', ['assassin'], { name: '쌍낫 베기', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [260, 390, 600] }] }],
+  ['luckystar',  '행운의 정령', '🍀', 2, 'star',   ['mystic'],   { name: '행운 폭발', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [200, 300, 470] }, { t: 'heal', tgt: 'lowestAlly', v: [100, 150, 240] }] }],
+  ['soulkeeper', '영혼 수습가', '🪦', 2, 'wraith', ['healer'],   { name: '영혼 봉합', fx: [{ t: 'heal', tgt: 'lowestAllies', n: 2, v: [170, 255, 400] }] }],
+  ['spider',     '독거미',      '🕷️', 2, 'wraith', ['sniper'],   { name: '독침', fx: [{ t: 'dmg', tgt: 'target', v: [220, 330, 520] }, { t: 'burn', tgt: 'target', v: [25, 35, 55], dur: 3 }] }],
+  ['sawdroid',   '톱날 드로이드', '🪚', 2, 'mech', ['assassin'], { name: '회전 톱날', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [270, 405, 630] }] }],
+  ['bard',       '별의 음유시인', '🎻', 2, 'star', ['healer'],   { name: '별의 노래', fx: [{ t: 'heal', tgt: 'allAllies', v: [70, 105, 170] }, { t: 'buff', tgt: 'allAllies', stat: 'as', v: [0.15, 0.2, 0.3], dur: 3 }] }],
+  // ── 3코스트 확장 (10)
+  ['lanternmage', '등롱 술사',  '🏮', 3, 'fire',   ['mystic'],   { name: '떠도는 불씨', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [210, 315, 560] }, { t: 'burn', tgt: 'last', v: [30, 45, 80], dur: 3 }] }],
+  ['flameleopard','화염 표범',  '🐆', 3, 'fire',   ['assassin'], { name: '사냥 본능', fx: [{ t: 'leap', tgt: 'lowestEnemy' }, { t: 'dmg', tgt: 'target', kind: 'phys', v: [330, 495, 920] }] }],
+  ['frostknight','빙결 기사',   '⛄', 3, 'frost',  ['guardian'], { name: '얼음 성벽', fx: [{ t: 'stun', tgt: 'selfArea', r: 1, v: [1.25, 1.5, 2] }, { t: 'shield', tgt: 'self', v: [400, 600, 1100], dur: 4 }] }],
+  ['mammoth',    '매머드 돌격병', '🦣', 3, 'frost', ['vanguard'], { name: '빙하 짓밟기', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [230, 345, 640] }, { t: 'stun', tgt: 'target', v: [1, 1.25, 1.75] }] }],
+  ['badger',     '오소리 드루이드', '🦡', 3, 'forest', ['mystic'], { name: '가시덩굴', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [260, 390, 720] }, { t: 'slow', tgt: 'area', r: 1, v: [0.3, 0.35, 0.45], dur: 3 }] }],
+  ['greybear',   '회색곰 전사', '🐻', 3, 'forest', ['vanguard'], { name: '포효하는 일격', fx: [{ t: 'dmg', tgt: 'target', v: [300, 450, 850] }, { t: 'heal', tgt: 'self', v: [200, 300, 560] }] }],
+  ['necromancer','강령술사',    '🧙‍♂️', 3, 'wraith', ['mystic'], { name: '망자 소환', fx: [{ t: 'summon', unit: 'bonemin', n: 2 }, { t: 'dmg', tgt: 'target', v: [200, 300, 560] }] }],
+  ['meteorrider','유성 기수',   '🐴', 3, 'star',   ['vanguard'], { name: '유성 돌격', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'target', v: [250, 375, 700] }, { t: 'stun', tgt: 'target', v: [1, 1.25, 1.75] }] }],
+  ['helicannon', '헬리콥터 포대', '🚁', 3, 'mech', ['sniper'],   { name: '기총 소사', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 2, v: [260, 390, 720] }] }],
+  ['nebula',     '성운 마도사', '🌌', 3, 'star',   ['mystic'],   { name: '성운 붕괴', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [270, 405, 750] }, { t: 'mana', tgt: 'allAllies', v: [10, 15, 25] }] }],
+  // ── 4코스트 확장 (10)
+  ['efreet',     '이프리트',    '🧞', 4, 'fire',   ['vanguard'], { name: '화염 강림', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [360, 540, 1500] }, { t: 'burn', tgt: 'selfArea', r: 1, v: [50, 75, 180], dur: 3 }] }],
+  ['stardancer', '별빛 무희',   '🏵️', 4, 'star',   ['healer'],   { name: '별의 춤', fx: [{ t: 'heal', tgt: 'allAllies', v: [180, 270, 800] }, { t: 'buff', tgt: 'allAllies', stat: 'atk', v: [0.2, 0.25, 0.5], dur: 4 }] }],
+  ['icedragon',  '빙룡',        '🐲', 4, 'frost',  ['mystic'],   { name: '서리 숨결', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [380, 570, 1700] }, { t: 'stun', tgt: 'area', r: 1, v: [1.5, 1.75, 3] }] }],
+  ['polarhunter','극지 사냥꾼', '🎿', 4, 'frost',  ['sniper'],   { name: '한파 저격', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [460, 690, 2000] }, { t: 'slow', tgt: 'target', v: [0.5, 0.55, 0.7], dur: 3 }] }],
+  ['elderdino',  '대지의 고룡', '🦕', 4, 'forest', ['guardian'], { name: '대지 진동', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [250, 375, 1100] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1.5, 1.75, 3] }, { t: 'heal', tgt: 'self', v: [400, 600, 2000] }] }],
+  ['nanomedic',  '나노 의무병', '💉', 4, 'mech',   ['healer'],   { name: '나노 재생', fx: [{ t: 'heal', tgt: 'allAllies', v: [170, 255, 750] }, { t: 'shield', tgt: 'lowestAllies', n: 2, v: [300, 450, 1300], dur: 4 }] }],
+  ['deathknight','죽음의 기사', '🏇', 4, 'wraith', ['guardian'], { name: '망자의 갑주', fx: [{ t: 'shield', tgt: 'self', v: [600, 900, 2500], dur: 5 }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [200, 300, 900] }] }],
+  ['shadowlord', '그림자 군주', '🦹', 4, 'wraith', ['assassin'], { name: '그림자 포식', fx: [{ t: 'dmg', tgt: 'lowestEnemy', v: [500, 750, 2200] }, { t: 'heal', tgt: 'self', v: [300, 450, 1200] }] }],
+  ['jetfighter', '강철 비룡',   '✈️', 4, 'mech',   ['sniper'],   { name: '융단 폭격', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [350, 525, 1500] }] }],
+  ['starsage',   '별의 현자',   '🪐', 4, 'star',   ['mystic'],   { name: '천체 공명', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [160, 240, 700] }, { t: 'mana', tgt: 'allAllies', v: [15, 20, 40] }] }],
+  // ── 5코스트 확장 (10)
+  ['infernal',   '지옥불 군주', '😈', 5, 'fire',   ['guardian'], { name: '지옥불 고리', fx: [{ t: 'dmg', tgt: 'selfArea', r: 2, v: [420, 630, 5000] }, { t: 'burn', tgt: 'selfArea', r: 2, v: [80, 120, 500], dur: 3 }, { t: 'shield', tgt: 'self', v: [800, 1200, 5000], dur: 5 }] }],
+  ['volcanotitan','화산 거신',  '🗻', 5, 'fire',   ['vanguard'], { name: '화산 낙하', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [520, 780, 6000] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1.5, 2, 5] }] }],
+  ['glaciertitan','빙하 거신',  '🏔️', 5, 'frost',  ['guardian'], { name: '빙하기', fx: [{ t: 'stun', tgt: 'allEnemies', v: [1, 1.25, 4] }, { t: 'shield', tgt: 'allAllies', v: [250, 375, 2000], dur: 4 }] }],
+  ['snowphoenix','설원 봉황',   '🕊️', 5, 'frost',  ['sniper'],   { name: '눈꽃 깃털비', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 4, v: [400, 600, 5000] }, { t: 'slow', tgt: 'last', v: [0.5, 0.6, 0.9], dur: 3 }] }],
+  ['elephantking','코끼리왕',   '🐘', 5, 'forest', ['guardian'], { name: '대지의 포효', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [300, 450, 5000] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [2, 2.5, 6] }, { t: 'heal', tgt: 'allAllies', v: [250, 375, 3000] }] }],
+  ['beastqueen', '야수 여왕',   '🐅', 5, 'forest', ['assassin'], { name: '포식자의 도약', fx: [{ t: 'leap', tgt: 'lowestEnemy' }, { t: 'dmg', tgt: 'target', kind: 'phys', v: [800, 1200, 9999] }] }],
+  ['ninja',      '그림자 닌자', '🥷', 5, 'wraith', ['assassin'], { name: '그림자 처형', fx: [{ t: 'leap', tgt: 'lowestEnemy' }, { t: 'execute', tgt: 'target', v: [0.25, 0.3, 1] }, { t: 'dmg', tgt: 'target', v: [700, 1050, 9999] }] }],
+  ['warmachine', '전쟁 기계',   '🚀', 5, 'mech',   ['vanguard'], { name: '돌파 포격', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [500, 750, 6000] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1, 1.25, 4] }] }],
+  ['aicore',     '초월 연산핵', '🧠', 5, 'mech',   ['mystic'],   { name: '전장 연산', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [300, 450, 4000] }, { t: 'stun', tgt: 'last', v: [0.75, 1, 3] }] }],
+  ['stargoddess','별의 여신',   '💫', 5, 'star',   ['healer'],   { name: '은하의 축복', fx: [{ t: 'heal', tgt: 'allAllies', v: [300, 450, 4000] }, { t: 'shield', tgt: 'allAllies', v: [200, 300, 2000], dur: 4 }, { t: 'mana', tgt: 'allAllies', v: [20, 25, 60] }] }],
 ];
 
 const UNITS = {};
@@ -143,6 +199,8 @@ for (const [id, name, emoji, cost, origin, roles, skill] of UNIT_LIST) {
 }
 // 소환/중립 몬스터 전용 정의 (상점에 나오지 않음)
 const EXTRA_UNITS = {
+  bonemin:  { id: 'bonemin',  name: '뼈 졸개',   emoji: '🦴', cost: 0, origin: null, roles: [], traits: [], hp: 420, atk: 45, as: 0.8, range: 1, armor: 20, mr: 20, mana: 999, startMana: 0, crit: 0.05, skill: null, summon: true },
+  militia:  { id: 'militia',  name: '강철 병사', emoji: '💂', cost: 0, origin: null, roles: [], traits: [], hp: 650, atk: 50, as: 0.7, range: 1, armor: 35, mr: 25, mana: 999, startMana: 0, crit: 0.05, skill: null, summon: true },
   sapling: { id: 'sapling', name: '묘목', emoji: '🌿', cost: 0, origin: null, roles: [], traits: [], hp: 500, atk: 40, as: 0.7, range: 1, armor: 30, mr: 30, mana: 999, startMana: 0, crit: 0, skill: null, summon: true },
   m_slime:  { id: 'm_slime',  name: '슬라임',   emoji: '🟢', cost: 0, traits: [], roles: [], hp: 300, atk: 22, as: 0.6, range: 1, armor: 5,  mr: 5,  mana: 999, startMana: 0, crit: 0, skill: null },
   m_wolf:   { id: 'm_wolf',   name: '들개',     emoji: '🐕', cost: 0, traits: [], roles: [], hp: 520, atk: 45, as: 0.8, range: 1, armor: 15, mr: 10, mana: 999, startMana: 0, crit: 0.1, skill: null },

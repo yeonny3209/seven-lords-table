@@ -31,7 +31,12 @@ function beginRound() {
     for (const P of G.players) if (P.alive && !P.isHuman) applyAugment(P, aiPickAugment(P, augmentOffers(P)));
     G.phase = 'augment';
     renderAll();
-    showAugmentPick(augmentOffers(human()), a => { applyAugment(human(), a); ready(); });
+    showAugmentPick(augmentOffers(human()), a => {
+      applyAugment(human(), a);
+      if (!G.pendingSpellPick) return ready();
+      G.pendingSpellPick = false;
+      showSpellPick(spellOffers(human(), 3), id => { if (id) addSpell(human(), id); ready(); });
+    });
   } else ready();
 }
 
@@ -129,7 +134,7 @@ function finishRound() {
       const dmg = won ? 0 : Math.max(1, base + survivorDamage(res.survivors[1]));
       applyResult(bt.a, won, dmg, false, '중립 몬스터');
       const rw = pveRewards(bt.a, won);
-      if (bt === mb) info = { won, dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw };
+      if (bt === mb) info = { won, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw };
     } else {
       const w = res.winner;
       const draw = res.timeout || w === -1;
@@ -137,7 +142,7 @@ function finishRound() {
       const dB = draw ? Math.max(1, base) : base + survivorDamage(res.survivors[0]);
       applyResult(bt.a, w === 0, dA, true, bt.b.name);
       if (!bt.ghost) applyResult(bt.b, w === 1, dB, true, bt.a.name);
-      if (bt === mb) info = { won: w === 0, dmg: dA, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost };
+      if (bt === mb) info = { won: w === 0, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost };
       else {
         const tag = draw ? '무승부' : `${(w === 0 ? bt.a : bt.b).emoji} 승`;
         others.push(`${bt.a.emoji} ${esc(bt.a.name)} vs ${bt.b.emoji} ${esc(bt.b.name)}${bt.ghost ? '(유령)' : ''} → ${tag}`);

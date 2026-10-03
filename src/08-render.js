@@ -270,7 +270,9 @@ function pushEffects(B, events) {
       case 'execute': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '처형!', color: '#ff5f5f', t: 0, dur: 1 }); break; }
       case 'leap': case 'blink': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
       case 'ghost': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '유령화', color: '#c9a6ff', t: 0, dur: 0.9 }); break; }
-      case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '수호천사', color: '#fff2b0', t: 0, dur: 1 }); break; }
+      case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '부활 중', color: '#fff2b0', t: 0, dur: 1 }); break; }
+      case 'laststand': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '최후의 저항!', color: '#ff8f5a', t: 0, dur: 1.2 }); break; }
+      case 'overtime': FX.texts.push({ x: VIEW.W / 2, y: VIEW.BOARD_H / 2, text: '⏱ 연장전 — 피해 증가', color: '#ffd84a', t: 0, dur: 1.8 }); break;
       case 'miss': { const p = pos(e.uid); if (p) FX.floats.push({ x: p[0], y: p[1] - 10, text: '회피', color: '#cccccc', size: 11, t: 0, dur: 0.6 }); break; }
     }
   }

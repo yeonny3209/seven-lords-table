@@ -109,7 +109,7 @@ function showSpellbook() {
     openModal(`<h2>📖 주문서</h2><p class="sub">장착 ${P.equipped.length}/${slots}칸 (레벨 7에 3칸) · 강화하면 효과가 오르거나 마나가 줄어듭니다. ${prep ? '' : '<b>전투 중에는 변경할 수 없습니다.</b>'}</p>
       ${P.spells.map((s, i) => {
         const sp = SPELLS[s.id], eq = P.equipped.includes(i);
-        const upCost = s.lvl < 3 ? sp.up[s.lvl - 1] : null;
+        const upCost = s.lvl < 3 ? spellUpCost(P, s) : null;
         return `<div class="spellbook-row ${eq ? 'eq' : ''}"><div class="si">${sp.icon}</div>
           <div><b>${sp.name}</b> <small>${'◆'.repeat(s.lvl)}${'◇'.repeat(3 - s.lvl)} · 마나 ${spellCost(s.id, s.lvl)} · ${sp.once ? '전투당 1회' : sp.cd + '초'}</small>
           <div class="sd">${spellDesc(s.id, s.lvl)}${upCost ? ` → <i>${spellDesc(s.id, s.lvl + 1)}</i>` : ''}</div>

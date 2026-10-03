@@ -7,6 +7,7 @@
 function spellCostNow(S, slot) {
   let c = spellCost(slot.id, slot.lvl);
   if (S.lordType === 'tactic' && S.castCount === 0) c -= 2;
+  if (S.aug.has('discount')) c = Math.max(Math.min(c, 1), c - 1);
   return Math.max(0, c);
 }
 function spellReady(S, i) {
@@ -42,7 +43,7 @@ function castSpell(B, side, slotIdx, target, auto) {
   S.lm -= spellCostNow(S, sl);
   S.castCount++;
   S.stats.casts++;
-  if (sp.once) sl.used = true;
+  if (sp.once) { sl.uses = (sl.uses || 0) + 1; if (sl.uses >= (S.aug.has('secondChance') ? 2 : 1)) sl.used = true; }
   else sl.cd = sp.cd * (S.aug.has('quickCast') ? 0.7 : 1);
   const mult = S.spellMult * (auto ? (S.ai && S.ai.mult ? S.ai.mult : CFG.AUTO_CAST_MULT) : 1);
   const v = sp.fx[0].v[sl.lvl - 1];
@@ -110,6 +111,11 @@ function castSpell(B, side, slotIdx, target, auto) {
         break;
       }
     }
+  }
+  if (S.aug.has('echo')) S.lm = Math.min(S.lmMax, S.lm + 1);
+  if (S.aug.has('grace')) for (const id of [target.uid, target.uid2]) {
+    const a = id != null ? unitByUid(B, id) : null;
+    if (a && a.side === side && targetable(a)) S.stats.spellHeal += healUnit(B, null, a, a.maxHp * 0.15, true);
   }
   return true;
 }
@@ -237,7 +243,7 @@ function aiCastTick(B, S, dt) {
     let tg = ruleTarget(B, S, sl, SPELLS[sl.id].auto[0], loose);
     if (!tg && SPELLS[sl.id].auto[1]) tg = ruleTarget(B, S, sl, SPELLS[sl.id].auto[1], loose);
     // 마나가 가득 차면 낭비하지 않도록 기본 대상에게라도 시전
-    if (!tg && (S.lm >= CFG.LORD_MANA_MAX - 0.5 || (loose && B.tick * CFG.TICK > 4))) tg = ruleTarget(B, S, sl, 'asap', true);
+    if (!tg && (S.lm >= S.lmMax - 0.5 || (loose && B.tick * CFG.TICK > 4))) tg = ruleTarget(B, S, sl, 'asap', true);
     if (!tg) continue;
     if (S.ai.castDelay > 0 && !S.aiArmed) { S.aiArmed = true; S.aiWait = B.rng.next() * S.ai.castDelay; return; }
     S.aiArmed = false;
