@@ -32,7 +32,13 @@ function beginDrag(e, payload, icon) {
   const d = $('#drag');
   d.textContent = icon; d.classList.remove('hidden');
   d.style.left = e.clientX + 'px'; d.style.top = e.clientY + 'px';
-  if (payload.unit) $('#sellZone').classList.add('active');
+  if (payload.unit) {
+    // 끄는 동안 상점 위에 판매 영역을 덮는다
+    const z = $('#sellZone'), s = $('#shop');
+    z.textContent = `여기에 놓으면 판매 +${sellPrice(payload.unit) + (hasAug(human(), 'broker') ? 1 : 0)}🪙`;
+    Object.assign(z.style, { left: s.offsetLeft + 'px', top: s.offsetTop + 'px', width: s.offsetWidth + 'px', height: s.offsetHeight + 'px' });
+    z.classList.add('active');
+  }
   hideTip();
 }
 function endDrag() {

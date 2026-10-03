@@ -83,7 +83,7 @@ h3.mt { margin-top: 14px; }
 #aimHint { position: absolute; left: 0; right: 0; top: 6px; text-align: center; pointer-events: none; font-size: 13px; color: var(--gold); text-shadow: 0 1px 3px #000; }
 
 /* 주문 바 */
-#spellBar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 760px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; flex-wrap: wrap; }
+#spellBar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 880px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; flex-wrap: wrap; }
 .lordmana { min-width: 150px; }
 .lm-label { font-size: 12px; color: var(--dim); margin-bottom: 3px; }
 .lm-label b { color: #9fd6ff; font-size: 15px; }
@@ -108,27 +108,27 @@ h3.mt { margin-top: 14px; }
 #btnReady { padding: 10px 16px; font-size: 15px; }
 
 /* 상점 */
-#shopBar { display: flex; gap: 8px; width: 100%; max-width: 760px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; position: relative; }
+#shopBar { display: flex; gap: 8px; width: 100%; max-width: 880px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; position: relative; }
 .shop-actions { display: flex; flex-direction: column; gap: 6px; }
 .shop-actions button { width: 92px; font-size: 13px; line-height: 1.2; }
-#shop { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; flex: 1; }
+#shop { display: grid; grid-template-columns: repeat(var(--n, 9), minmax(0, 1fr)); gap: 5px; flex: 1; }
 .shop-card {
   position: relative; border-radius: 8px; padding: 6px 4px 5px; background: var(--panel); border: 2px solid var(--cc); cursor: pointer;
-  text-align: center; min-height: 92px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform .1s;
+  text-align: center; min-height: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform .1s;
 }
 .shop-card:hover { transform: translateY(-2px); }
-.shop-card .se { font-size: 30px; line-height: 1.1; }
-.shop-card .sn { font-size: 12px; font-weight: 700; }
-.shop-card .st { font-size: 11px; color: var(--dim); }
-.shop-card .sp { position: absolute; top: 3px; right: 5px; font-weight: 800; color: var(--gold); font-size: 13px; }
+.shop-card .se { font-size: 27px; line-height: 1.1; margin-top: 8px; }
+.shop-card .sn { font-size: 11px; font-weight: 700; line-height: 1.2; word-break: keep-all; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.shop-card .st { font-size: 12px; margin-top: auto; }
+.shop-card .sp { position: absolute; top: 2px; right: 4px; font-weight: 800; color: var(--gold); font-size: 12px; }
 .shop-card.owned { box-shadow: 0 0 0 2px #fff3, 0 0 14px var(--cc); }
-.shop-card.owned::after { content: attr(data-own); position: absolute; top: 3px; left: 5px; font-size: 11px; color: #fff; background: #0008; border-radius: 4px; padding: 0 4px; }
+.shop-card.owned::after { content: attr(data-own); position: absolute; top: 2px; left: 3px; font-size: 10px; color: #fff; background: #0008; border-radius: 4px; padding: 0 4px; }
 .shop-card.merge { animation: pulse 1s infinite alternate; }
 @keyframes pulse { from { box-shadow: 0 0 0 2px #ffd56a, 0 0 6px #ffd56a; } to { box-shadow: 0 0 0 2px #ffd56a, 0 0 18px #ffd56a; } }
 .shop-card.sold { visibility: hidden; }
 .shop-card.poor { filter: grayscale(.7) brightness(.7); }
-#sellZone { width: 82px; display: grid; place-items: center; text-align: center; font-size: 11px; color: var(--dim); border: 2px dashed var(--line); border-radius: 8px; }
-#sellZone.active { border-color: var(--red); color: var(--red); background: #ff5f5f14; }
+#sellZone { position: absolute; display: none; place-items: center; text-align: center; font-size: 15px; font-weight: 700; color: #ffb0b0; border: 2px dashed var(--red); border-radius: 8px; background: #2a1414ee; z-index: 5; pointer-events: none; }
+#sellZone.active { display: grid; }
 
 /* 순위표 */
 .prow { display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 8px; margin-bottom: 4px; cursor: pointer; border: 1px solid transparent; background: #0002; }
@@ -234,8 +234,7 @@ table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7
   .shop-actions button { flex: 1; width: auto; }
   #shop { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .shop-card .se { font-size: 24px; }
-  .shop-card .st { display: none; }
-  #sellZone { width: 100%; padding: 6px; }
+  .shop-card .se { margin-top: 10px; }
   .spell-card { width: 100px; }
   .help-grid { grid-template-columns: 1fr; }
 }

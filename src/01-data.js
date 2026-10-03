@@ -11,6 +11,7 @@ const CFG = {
   OVERTIME: 15,                  // 연장전 시작(초)
   OVERTIME_RAMP: 0.08,           // 연장전 초당 피해 증가
   MOVE_TIME: 0.45,               // 한 칸 이동 시간
+  SHOP_SIZE: 9,                  // 상점 칸 수 (유닛 90종에 맞춰 5 → 9)
   REROLL_COST: 2,
   XP_COST: 4, XP_AMOUNT: 4,
   BASE_INCOME: 5,

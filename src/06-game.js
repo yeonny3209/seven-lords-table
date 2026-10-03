@@ -55,7 +55,7 @@ function R() {
 function makePlayer(id, name, emoji, lordType, isHuman) {
   return {
     id, name, emoji, lordType, isHuman, hp: CFG.START_HP, gold: 0, level: 1, xp: 0,
-    board: [], bench: new Array(CFG.BENCH).fill(null), shop: [null, null, null, null, null],
+    board: [], bench: new Array(CFG.BENCH).fill(null), shop: new Array(CFG.SHOP_SIZE).fill(null),
     items: [], spells: LORD_TYPES[lordType].spells.map(s => ({ id: s, lvl: 1, rule: 'off' })),
     equipped: [0, 1], aug: [], streak: 0, alive: true, place: 0, freeRolls: 0, eggT: 0,
     lastResult: null, ai: null, history: [],
@@ -80,7 +80,8 @@ function rollShop(P) {
   const odds = SHOP_ODDS[P.level].slice();
   if (hasAug(P, 'highRoller')) { odds[1] += odds[0]; odds[0] = 0; }
   const r = R();
-  for (let i = 0; i < 5; i++) {
+  P.shop.length = CFG.SHOP_SIZE;
+  for (let i = 0; i < CFG.SHOP_SIZE; i++) {
     let id = null;
     for (let tries = 0; tries < 6 && !id; tries++) {
       const cost = r.weighted(odds) + 1;

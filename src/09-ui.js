@@ -105,13 +105,14 @@ function renderShop() {
   for (const u of allUnits(P)) if (u.star === 1) owned[u.defId] = (owned[u.defId] || 0) + 1;
   const ownedAny = {};
   for (const u of allUnits(P)) ownedAny[u.defId] = true;
+  $('#shop').style.setProperty('--n', P.shop.length);
   $('#shop').innerHTML = P.shop.map((id, i) => {
     if (!id) return `<div class="shop-card sold" style="--cc:#333"></div>`;
     const d = UNITS[id];
     const cls = [ownedAny[id] ? 'owned' : '', owned[id] >= 2 ? 'merge' : '', P.gold < d.cost ? 'poor' : ''].join(' ');
     return `<div class="shop-card ${cls}" style="--cc:${COST_COLOR[d.cost]}" data-shop="${i}" data-own="보유 ${owned[id] || 0}" data-tip="unit:${id}:1">
       <span class="sp">${d.cost}🪙</span><div class="se">${d.emoji}</div><div class="sn">${d.name}</div>
-      <div class="st">${d.traits.map(t => TRAITS[t].icon + TRAITS[t].name).join(' ')}</div></div>`;
+      <div class="st">${d.traits.map(t => TRAITS[t].icon).join('')}</div></div>`;
   }).join('');
 }
 
