@@ -1,0 +1,3609 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>일곱 군주의 탁자</title>
+<meta name="description" content="AI 군주 7명과 겨루는 브라우저 오토배틀러. 배치는 전략, 주문은 전술.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👑</text></svg>">
+<style>
+:root {
+  --bg: #120f0d; --bg2: #1c1714; --panel: #231d19; --panel2: #2c2420; --line: #3e332b;
+  --text: #f1e7d8; --dim: #a8987f; --gold: #f2c14e; --gold2: #b8862b; --red: #ff5f5f;
+  --green: #59d97a; --blue: #5aa9ff; --violet: #b07cff;
+  --radius: 10px;
+  font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body {
+  background: radial-gradient(ellipse at 50% 20%, #2a201a 0%, var(--bg) 70%);
+  overflow-x: hidden; user-select: none; -webkit-user-select: none;
+}
+button {
+  font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer; transition: background .15s, border-color .15s, transform .05s;
+}
+button:hover:not(:disabled) { border-color: var(--gold2); background: #382d26; }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: linear-gradient(#e0a93a, #b47a1f); color: #1d140a; font-weight: 700; border-color: #f5d07a; }
+button.primary:hover:not(:disabled) { background: linear-gradient(#f0bb4a, #c48a2a); }
+button.ghost { background: transparent; }
+button.small { padding: 4px 8px; font-size: 13px; }
+small { color: var(--dim); font-weight: 400; }
+h3 { margin: 0 0 6px; font-size: 14px; color: var(--gold); letter-spacing: .02em; }
+h3.mt { margin-top: 14px; }
+.hidden { display: none !important; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+
+/* 상단 */
+#topbar {
+  display: flex; align-items: center; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(#251d17, #1a1512); flex-wrap: wrap;
+}
+.brand { font-weight: 800; font-size: 18px; color: var(--gold); white-space: nowrap; }
+.round-info { display: flex; gap: 8px; align-items: center; font-weight: 700; font-size: 18px; }
+.stats { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.stat { display: flex; align-items: center; gap: 5px; font-size: 16px; }
+.stat b { font-size: 18px; }
+.stat.lvl span { font-weight: 800; color: var(--gold); }
+.xpbar { width: 70px; height: 7px; background: #0006; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+.xpbar i { display: block; height: 100%; background: linear-gradient(90deg, #4aa3ff, #8fd0ff); width: 0; transition: width .3s; }
+.top-actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* 레이아웃 */
+#layout { display: grid; grid-template-columns: 210px minmax(0, 1fr) 230px; gap: 12px; padding: 12px; max-width: 1280px; margin: 0 auto; }
+#left, #right { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; align-self: start; }
+#center { display: flex; flex-direction: column; gap: 10px; min-width: 0; align-items: center; }
+
+/* 시너지 */
+.trait { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 8px; margin-bottom: 4px; background: #0002; border: 1px solid transparent; cursor: help; }
+.trait.on { background: #ffffff0d; border-color: var(--line); }
+.trait .ti { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; font-size: 15px; background: #0004; }
+.trait.on .ti { box-shadow: 0 0 0 2px var(--tc) inset; }
+.trait.t3 .ti { background: var(--tc); }
+.trait .tn { flex: 1; font-size: 13px; }
+.trait .tc { font-size: 12px; color: var(--dim); }
+.trait.on .tc b { color: var(--gold); }
+.trait.off { opacity: .55; }
+.empty-note { color: var(--dim); font-size: 12px; }
+
+#inventory { display: flex; flex-wrap: wrap; gap: 5px; min-height: 30px; }
+.item-chip { width: 34px; height: 34px; display: grid; place-items: center; font-size: 19px; background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; cursor: grab; }
+.item-chip.done { border-color: var(--gold2); background: #3a2d18; }
+.item-chip:hover { border-color: var(--gold); }
+#augList { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.aug-chip { padding: 4px 6px; background: #0003; border: 1px solid var(--line); border-radius: 6px; cursor: help; }
+
+/* 보드 */
+#boardWrap { position: relative; width: 100%; max-width: 500px; }
+#board { display: block; width: 100%; height: auto; border-radius: 12px; touch-action: none; }
+#banner {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.spell-banner {
+  padding: 6px 14px; border-radius: 99px; background: #000b; border: 1px solid var(--gold2); font-weight: 700;
+  font-size: 15px; white-space: nowrap; animation: bannerIn 1.6s ease-out forwards;
+}
+.spell-banner.enemy { border-color: #ff6b6b; color: #ffd0d0; }
+@keyframes bannerIn { 0% { opacity: 0; transform: scale(.7); } 12% { opacity: 1; transform: scale(1.05); } 20% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+#aimHint { position: absolute; left: 0; right: 0; top: 6px; text-align: center; pointer-events: none; font-size: 13px; color: var(--gold); text-shadow: 0 1px 3px #000; }
+
+/* 주문 바 */
+#spellBar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 760px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; flex-wrap: wrap; }
+.lordmana { min-width: 150px; }
+.lm-label { font-size: 12px; color: var(--dim); margin-bottom: 3px; }
+.lm-label b { color: #9fd6ff; font-size: 15px; }
+.lm-bar { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; height: 12px; }
+.lm-bar i { background: #0005; border-radius: 2px; position: relative; overflow: hidden; border: 1px solid #ffffff10; }
+.lm-bar i b { position: absolute; inset: 0; background: linear-gradient(#8fd0ff, #3b7dff); transform-origin: left; }
+#spellCards { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
+.spell-card {
+  position: relative; width: 112px; padding: 5px 7px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line);
+  cursor: pointer; font-size: 12px; line-height: 1.25; overflow: hidden;
+}
+.spell-card .sc-top { display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; }
+.spell-card .sc-icon { font-size: 18px; }
+.spell-card .sc-cost { margin-left: auto; color: #9fd6ff; font-weight: 800; }
+.spell-card .sc-sub { color: var(--dim); font-size: 11px; display: flex; justify-content: space-between; }
+.spell-card .sc-key { position: absolute; left: 3px; bottom: 2px; font-size: 10px; color: #fff6; }
+.spell-card.ready { border-color: #7cc6ff; box-shadow: 0 0 12px #3b8cff66; background: #23324a; }
+.spell-card.aiming { border-color: var(--gold); box-shadow: 0 0 14px #f2c14e88; }
+.spell-card.used { opacity: .35; }
+.spell-card .sc-cd { position: absolute; inset: 0; background: #000a; display: grid; place-items: center; font-weight: 800; font-size: 16px; }
+.spell-card .sc-auto { font-size: 10px; color: var(--green); }
+#btnReady { padding: 10px 16px; font-size: 15px; }
+
+/* 상점 */
+#shopBar { display: flex; gap: 8px; width: 100%; max-width: 760px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; position: relative; }
+.shop-actions { display: flex; flex-direction: column; gap: 6px; }
+.shop-actions button { width: 92px; font-size: 13px; line-height: 1.2; }
+#shop { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; flex: 1; }
+.shop-card {
+  position: relative; border-radius: 8px; padding: 6px 4px 5px; background: var(--panel); border: 2px solid var(--cc); cursor: pointer;
+  text-align: center; min-height: 92px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform .1s;
+}
+.shop-card:hover { transform: translateY(-2px); }
+.shop-card .se { font-size: 30px; line-height: 1.1; }
+.shop-card .sn { font-size: 12px; font-weight: 700; }
+.shop-card .st { font-size: 11px; color: var(--dim); }
+.shop-card .sp { position: absolute; top: 3px; right: 5px; font-weight: 800; color: var(--gold); font-size: 13px; }
+.shop-card.owned { box-shadow: 0 0 0 2px #fff3, 0 0 14px var(--cc); }
+.shop-card.owned::after { content: attr(data-own); position: absolute; top: 3px; left: 5px; font-size: 11px; color: #fff; background: #0008; border-radius: 4px; padding: 0 4px; }
+.shop-card.merge { animation: pulse 1s infinite alternate; }
+@keyframes pulse { from { box-shadow: 0 0 0 2px #ffd56a, 0 0 6px #ffd56a; } to { box-shadow: 0 0 0 2px #ffd56a, 0 0 18px #ffd56a; } }
+.shop-card.sold { visibility: hidden; }
+.shop-card.poor { filter: grayscale(.7) brightness(.7); }
+#sellZone { width: 82px; display: grid; place-items: center; text-align: center; font-size: 11px; color: var(--dim); border: 2px dashed var(--line); border-radius: 8px; }
+#sellZone.active { border-color: var(--red); color: var(--red); background: #ff5f5f14; }
+
+/* 순위표 */
+.prow { display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 8px; margin-bottom: 4px; cursor: pointer; border: 1px solid transparent; background: #0002; }
+.prow:hover { border-color: var(--line); background: #ffffff08; }
+.prow.me { border-color: var(--gold2); }
+.prow.dead { opacity: .35; }
+.prow.opp { box-shadow: 0 0 0 2px #ff6b6b inset; }
+.prow .pe { font-size: 22px; width: 28px; text-align: center; }
+.prow .pm { flex: 1; min-width: 0; }
+.prow .pn { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .ph { height: 6px; background: #0006; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.prow .ph i { display: block; height: 100%; background: linear-gradient(90deg, #ff6b6b, #59d97a); }
+.prow .pv { font-weight: 800; font-size: 14px; width: 30px; text-align: right; }
+.prow .ps { font-size: 10px; color: var(--dim); }
+#matchInfo { margin-top: 10px; font-size: 12px; color: var(--dim); line-height: 1.5; }
+
+/* 툴팁 */
+#tooltip {
+  position: fixed; z-index: 50; max-width: 290px; background: #0f0c0aee; border: 1px solid var(--gold2); border-radius: 8px; padding: 8px 10px;
+  font-size: 12px; line-height: 1.45; pointer-events: none; box-shadow: 0 6px 24px #0009;
+}
+#tooltip h4 { margin: 0 0 3px; font-size: 14px; color: var(--gold); }
+#tooltip .tt-sub { color: var(--dim); }
+#tooltip .tt-row { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 4px 0; }
+#tooltip hr { border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
+#drag { position: fixed; z-index: 60; pointer-events: none; font-size: 30px; transform: translate(-50%, -50%); filter: drop-shadow(0 4px 6px #000a); }
+
+/* 모달 */
+#modal { position: fixed; inset: 0; z-index: 40; background: #000b; display: grid; place-items: center; padding: 16px; }
+.modal-box { background: var(--bg2); border: 1px solid var(--gold2); border-radius: 14px; padding: 18px 20px; width: min(760px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 10px 50px #000; }
+.modal-box h2 { margin: 0 0 4px; color: var(--gold); font-size: 22px; }
+.modal-box .sub { color: var(--dim); margin: 0 0 14px; font-size: 14px; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.choice {
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--panel); cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: 4px; transition: border-color .15s, transform .1s;
+}
+.choice:hover:not(.disabled) { border-color: var(--gold); transform: translateY(-2px); }
+.choice.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
+.choice.disabled { opacity: .4; cursor: default; }
+.choice .ci { font-size: 34px; }
+.choice .cn { font-weight: 800; font-size: 15px; }
+.choice .cd { font-size: 12px; color: var(--dim); line-height: 1.4; }
+.choice.spellc { background: #1d2738; }
+.row-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+.field { display: flex; gap: 8px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+.field label { min-width: 70px; color: var(--dim); font-size: 13px; }
+.field input, .field select { font: inherit; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; }
+.seg button.on { background: var(--gold2); color: #1b130a; font-weight: 700; }
+.title-hero { text-align: center; margin-bottom: 10px; }
+.title-hero .crown { font-size: 54px; }
+.title-hero h1 { margin: 2px 0; color: var(--gold); font-size: 30px; letter-spacing: .04em; }
+.title-hero p { color: var(--dim); margin: 0; }
+table.stats { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.stats td, table.stats th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7b39); border-radius: 4px; }
+.result-head { font-size: 28px; font-weight: 900; }
+.result-head.win { color: var(--green); }
+.result-head.lose { color: var(--red); }
+.mini-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; max-width: 360px; }
+.mini-board div { aspect-ratio: 1; background: #0004; border-radius: 6px; display: grid; place-items: center; font-size: 20px; position: relative; border: 2px solid transparent; }
+.mini-board div small { position: absolute; bottom: -1px; font-size: 9px; color: var(--gold); }
+.spellbook-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--panel); }
+.spellbook-row.eq { border-color: #7cc6ff; background: #1f2b3d; }
+.spellbook-row .si { font-size: 26px; text-align: center; }
+.spellbook-row .sd { font-size: 12px; color: var(--dim); }
+.spellbook-row .sx { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.spellbook-row select { font: inherit; font-size: 11px; background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px; max-width: 220px; }
+.carousel { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+.carousel .choice { align-items: center; text-align: center; padding: 8px; }
+.carousel .taken-by { font-size: 11px; color: var(--gold); }
+.queue { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; font-size: 20px; }
+.queue span { padding: 2px 5px; border-radius: 6px; background: #0003; }
+.queue span.now { background: var(--gold2); }
+.queue span.done { opacity: .3; }
+.help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 13px; line-height: 1.55; }
+.help-grid kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; }
+
+/* 토스트 */
+#toasts { position: fixed; left: 50%; top: 60px; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+.toast { background: #000d; border: 1px solid var(--line); padding: 6px 14px; border-radius: 99px; font-size: 13px; animation: toast 2.2s forwards; }
+.toast.gold { border-color: var(--gold); color: var(--gold); }
+.toast.bad { border-color: var(--red); color: #ffc0c0; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* 반응형 */
+@media (max-width: 1050px) {
+  #layout { grid-template-columns: 1fr; }
+  #left, #right { order: 2; }
+  #left { display: grid; grid-template-columns: 1fr; }
+  #traits { display: flex; flex-wrap: wrap; gap: 4px; }
+  #traits .trait { margin: 0; }
+  #players { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 4px; }
+}
+@media (max-width: 640px) {
+  #layout { padding: 8px 16px; }
+  #topbar { gap: 8px; padding: 6px 10px; }
+  .brand span { display: none; }
+  #shopBar { flex-wrap: wrap; }
+  .shop-actions { flex-direction: row; width: 100%; }
+  .shop-actions button { flex: 1; width: auto; }
+  #shop { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .shop-card .se { font-size: 24px; }
+  .shop-card .st { display: none; }
+  #sellZone { width: 100%; padding: 6px; }
+  .spell-card { width: 100px; }
+  .help-grid { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">👑 <span>일곱 군주의 탁자</span></div>
+    <div class="round-info"><span id="roundLabel">1-1</span><span id="roundType" class="pill">몬스터</span></div>
+    <div class="stats">
+      <div class="stat" title="군주 체력"><span>❤️</span><b id="hpVal">100</b></div>
+      <div class="stat" title="골드 (이자: 10골드당 1)"><span>🪙</span><b id="goldVal">0</b><small id="interestVal"></small></div>
+      <div class="stat lvl" title="레벨 = 보드 유닛 수"><span>Lv</span><b id="lvlVal">1</b>
+        <div class="xpbar"><i id="xpFill"></i></div><small id="xpVal">0/2</small></div>
+      <div class="stat" title="연승(+)/연패(-)"><span id="streakIcon">➖</span><b id="streakVal">0</b></div>
+    </div>
+    <div class="top-actions">
+      <button id="btnSpeed" class="ghost" title="전투 속도 (S)">1배속</button>
+      <button id="btnHelp" class="ghost" title="도움말 (H)">?</button>
+      <button id="btnMenu" class="ghost" title="메뉴">☰</button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <aside id="left">
+      <h3>시너지</h3>
+      <div id="traits"></div>
+      <h3 class="mt">보관함 <small>(유닛에 끌어다 장착)</small></h3>
+      <div id="inventory"></div>
+      <h3 class="mt">증강</h3>
+      <div id="augList"></div>
+    </aside>
+
+    <section id="center">
+      <div id="boardWrap">
+        <canvas id="board"></canvas>
+        <div id="banner"></div>
+        <div id="aimHint"></div>
+      </div>
+      <div id="spellBar">
+        <div class="lordmana">
+          <div class="lm-label">군주 마나 <b id="lmVal">0</b>/10</div>
+          <div class="lm-bar" id="lmBar"></div>
+        </div>
+        <div id="spellCards"></div>
+        <button id="btnSpellbook" class="ghost small" title="주문서 (B)">📖 주문서</button>
+        <button id="btnReady" class="primary" title="준비 완료 (Space)">준비 완료 ▶</button>
+      </div>
+      <div id="shopBar">
+        <div class="shop-actions">
+          <button id="btnXp" title="경험치 구매 (F)">⬆ 경험치<br><small>4🪙</small></button>
+          <button id="btnRoll" title="새로고침 (D)">🔄 새로고침<br><small>2🪙</small></button>
+        </div>
+        <div id="shop"></div>
+        <div id="sellZone">판매하려면<br>여기로 끌어오기</div>
+      </div>
+    </section>
+
+    <aside id="right">
+      <h3>군주 순위 <small>(클릭해 열람)</small></h3>
+      <div id="players"></div>
+      <div id="matchInfo"></div>
+    </aside>
+  </main>
+
+  <div id="tooltip" class="hidden"></div>
+  <div id="drag" class="hidden"></div>
+  <div id="modal" class="hidden"><div class="modal-box" id="modalBox"></div></div>
+  <div id="toasts"></div>
+</div>
+<script>
+/* ===== 00-core.js ===== */
+'use strict';
+/* =====================================================================
+ * 00. 공용 도구 — 시드 기반 난수, 작은 유틸리티
+ * ===================================================================== */
+
+// mulberry32: 상태가 정수 하나라서 저장·복원이 쉽다.
+class RNG {
+  constructor(seed) { this.s = (seed >>> 0) || 1; }
+  next() {
+    let t = (this.s = (this.s + 0x6D2B79F5) >>> 0);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  int(n) { return Math.floor(this.next() * n); }
+  range(a, b) { return a + this.next() * (b - a); }
+  chance(p) { return this.next() < p; }
+  pick(arr) { return arr[this.int(arr.length)]; }
+  shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = this.int(i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  }
+  weighted(weights) { // weights: 배열, 인덱스 반환
+    let sum = 0; for (const w of weights) sum += w;
+    let x = this.next() * sum;
+    for (let i = 0; i < weights.length; i++) { x -= weights[i]; if (x < 0) return i; }
+    return weights.length - 1;
+  }
+}
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const cheb = (r1, c1, r2, c2) => Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
+const sum = arr => arr.reduce((a, b) => a + b, 0);
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+// 시너지 단계: 0 = 미발동, 1~3 = 2/4/6명 단계
+function traitTier(trait, count) {
+  const t = TRAITS[trait].tiers;
+  let tier = 0;
+  for (let i = 0; i < t.length; i++) if (count >= t[i]) tier = i + 1;
+  return tier;
+}
+
+// 보드 유닛 목록 → 시너지 카운트 (서로 다른 유닛만, 문장 증강 반영)
+function computeTraits(boardUnits, aug) {
+  const seen = new Set();
+  const counts = {};
+  for (const u of boardUnits) {
+    if (seen.has(u.defId)) continue;
+    seen.add(u.defId);
+    const d = UNITS[u.defId];
+    if (!d) continue;
+    for (const t of d.traits) counts[t] = (counts[t] || 0) + 1;
+  }
+  if (aug) for (const a of aug) if (a.id === 'emblem' && counts[a.param]) counts[a.param] += 1;
+  return counts;
+}
+
+/* ===== 01-data.js ===== */
+/* =====================================================================
+ * 01. 데이터 테이블 — 밸런스 조정은 이 섹션의 숫자만 바꾸면 된다.
+ * ===================================================================== */
+
+const CFG = {
+  ROWS: 4, COLS: 7,              // 한쪽 진영 크기
+  BENCH: 9,
+  START_HP: 100,
+  TICK: 0.1,                     // 전투 틱(초)
+  BATTLE_TIME: 30,               // 전투 제한 시간(초)
+  OVERTIME: 15,                  // 연장전 시작(초)
+  OVERTIME_RAMP: 0.08,           // 연장전 초당 피해 증가
+  MOVE_TIME: 0.45,               // 한 칸 이동 시간
+  REROLL_COST: 2,
+  XP_COST: 4, XP_AMOUNT: 4,
+  BASE_INCOME: 5,
+  MAX_INTEREST: 5,
+  LORD_MANA_MAX: 10,
+  LORD_MANA_REGEN: 1.5,          // 초당 (전투가 약 15초라 주문 3~5회가 되도록 조정)
+  AUTO_CAST_MULT: 0.9,           // 자동 시전 효율
+  STAR_MULT: [0, 1, 1.8, 3.2],
+  ITEM_MAX: 3,
+};
+
+// 레벨 n → n+1 에 필요한 경험치
+const XP_TABLE = [0, 2, 2, 6, 10, 20, 36, 56, 80, 0];
+
+// 레벨별 상점 코스트 확률(%)
+const SHOP_ODDS = {
+  1: [100, 0, 0, 0, 0], 2: [100, 0, 0, 0, 0], 3: [75, 25, 0, 0, 0],
+  4: [55, 30, 15, 0, 0], 5: [45, 33, 20, 2, 0], 6: [30, 35, 28, 7, 0],
+  7: [20, 30, 33, 15, 2], 8: [15, 20, 35, 25, 5], 9: [10, 15, 30, 30, 15],
+};
+const POOL_SIZE = [0, 29, 22, 18, 12, 9];
+const COST_COLOR = ['#000', '#9aa4b1', '#3fbf6a', '#3d8bff', '#b45cff', '#ffb52e'];
+
+/* ---------- 시너지 ---------- */
+// 계열(origin) 6종 + 역할(role) 6종, 단계 2/4/6
+const TRAITS = {
+  fire:     { name: '화염', icon: '🔥', kind: 'origin', color: '#ff6b3d', tiers: [2, 4, 6],
+              desc: ['피격 시 공격자에게 화상 (초당 15)', '화상 초당 35', '화상 초당 70, 모든 아군에게 적용'] },
+  frost:    { name: '서리', icon: '❄️', kind: 'origin', color: '#6fd3ff', tiers: [2, 4, 6],
+              desc: ['공격 시 적 공격 속도 -15% (2초)', '-25%', '-40%, 모든 아군에게 적용'] },
+  forest:   { name: '숲', icon: '🌿', kind: 'origin', color: '#5ad16b', tiers: [2, 4, 6],
+              desc: ['매 초 최대 체력의 2% 회복', '3.5% 회복', '6% 회복, 모든 아군에게 적용'] },
+  wraith:   { name: '망령', icon: '👻', kind: 'origin', color: '#b07cff', tiers: [2, 4, 6],
+              desc: ['처치된 망령이 2초간 유령으로 공격 (피해 50%)', '3초, 70%', '5초, 100%, 모든 아군에게 적용'] },
+  mech:     { name: '기계', icon: '⚙️', kind: 'origin', color: '#c9a36b', tiers: [2, 4, 6],
+              desc: ['전투 시작 시 보호막 180', '보호막 380', '보호막 750, 모든 아군에게 적용'] },
+  star:     { name: '별빛', icon: '✨', kind: 'origin', color: '#ffe066', tiers: [2, 4, 6],
+              desc: ['별빛 유닛 스킬 마나 -15%', '-25%', '-35% 모든 아군, 군주 마나 회복 +60%'] },
+  guardian: { name: '수호자', icon: '🛡️', kind: 'role', color: '#8fa8c8', tiers: [2, 4, 6],
+              desc: ['수호자 방어력·마법저항 +20', '+40, 다른 아군 +10', '+70, 다른 아군 +25'] },
+  vanguard: { name: '돌격대', icon: '⚔️', kind: 'role', color: '#ff8f5a', tiers: [2, 4, 6],
+              desc: ['전투 시작 시 적 후열로 도약, 공격력 +15%', '+30%', '+55%, 도약 착지 시 주변 기절 1초'] },
+  sniper:   { name: '저격수', icon: '🏹', kind: 'role', color: '#9be36b', tiers: [2, 4, 6],
+              desc: ['사거리 +1, 거리 1칸당 피해 +5%', '칸당 +8%', '사거리 +2, 칸당 +12%'] },
+  mystic:   { name: '주술사', icon: '🔮', kind: 'role', color: '#d070ff', tiers: [2, 4, 6],
+              desc: ['스킬 피해 +20%', '스킬 피해 +45%, 주문 피해 +15%', '스킬 피해 +80%, 주문 피해 +30%'] },
+  assassin: { name: '암살자', icon: '🗡️', kind: 'role', color: '#ff5f7e', tiers: [2, 4, 6],
+              desc: ['치명타 확률 +15%, 치명타 피해 +25%', '+30% / +45%', '+45% / +70%'] },
+  healer:   { name: '치유사', icon: '✚', kind: 'role', color: '#7dffc4', tiers: [2, 4, 6],
+              desc: ['아군 회복량·보호막 +25%', '+50%', '+90%'] },
+};
+const TRAIT_KEYS = Object.keys(TRAITS);
+
+/* ---------- 유닛 ---------- */
+// 주 역할(roles[0])에 따라 기본 능력치 원형을 정하고 코스트로 배율을 곱한다.
+const ARCHETYPE = {
+  guardian: { hp: 1.25, atk: 0.75, as: 0.60, range: 1, armor: 40, mr: 30, mana: 100, start: 30, crit: 0.05 },
+  vanguard: { hp: 1.10, atk: 0.95, as: 0.70, range: 1, armor: 30, mr: 25, mana: 80,  start: 20, crit: 0.05 },
+  assassin: { hp: 0.85, atk: 1.15, as: 0.80, range: 1, armor: 20, mr: 20, mana: 70,  start: 10, crit: 0.25 },
+  sniper:   { hp: 0.70, atk: 1.10, as: 0.75, range: 4, armor: 15, mr: 15, mana: 80,  start: 10, crit: 0.10 },
+  mystic:   { hp: 0.75, atk: 0.70, as: 0.65, range: 3, armor: 15, mr: 25, mana: 60,  start: 15, crit: 0.05 },
+  healer:   { hp: 0.80, atk: 0.65, as: 0.65, range: 3, armor: 20, mr: 25, mana: 70,  start: 20, crit: 0.05 },
+};
+const COST_HP = [0, 560, 660, 780, 920, 1080];
+const COST_ATK = [0, 58, 70, 82, 98, 120];
+
+// 스킬 효과 단위(fx). v 배열은 [1성, 2성, 3성] 값.
+// 대상 지정자: target, self, area(대상 주변), selfArea(자신 주변), lowestAlly, lowestAllies, allAllies,
+//              allEnemies, lowestEnemy, randomEnemies, farthestEnemy
+const UNIT_LIST = [
+  // ── 1코스트 (12)
+  ['ember',      '불꽃 도깨비', '👺', 1, 'fire',   ['vanguard'], { name: '불꽃 박치기', fx: [{ t: 'dmg', tgt: 'target', v: [160, 240, 380] }, { t: 'burn', tgt: 'target', v: [20, 30, 50], dur: 3 }] }],
+  ['salamander', '도롱뇽 기사', '🦎', 1, 'fire',   ['guardian'], { name: '용암 비늘', fx: [{ t: 'shield', tgt: 'self', v: [260, 360, 560], dur: 4 }, { t: 'burn', tgt: 'selfArea', r: 1, v: [15, 25, 40], dur: 3 }] }],
+  ['frostbow',   '서리 궁수',   '🧝', 1, 'frost',  ['sniper'],   { name: '얼음 화살', fx: [{ t: 'dmg', tgt: 'target', v: [180, 270, 420] }, { t: 'slow', tgt: 'target', v: [0.3, 0.35, 0.45], dur: 3 }] }],
+  ['snowcub',    '눈곰 새끼',   '🐻‍❄️', 1, 'frost', ['guardian'], { name: '눈사태 포옹', fx: [{ t: 'dmg', tgt: 'target', v: [100, 150, 250] }, { t: 'stun', tgt: 'target', v: [1.5, 1.75, 2.25] }] }],
+  ['sprout',     '새싹 정령',   '🌱', 1, 'forest', ['healer'],   { name: '새싹의 축복', fx: [{ t: 'heal', tgt: 'lowestAlly', v: [220, 320, 520] }] }],
+  ['boar',       '멧돼지',      '🐗', 1, 'forest', ['vanguard'], { name: '돌진', fx: [{ t: 'dmg', tgt: 'target', v: [160, 240, 380] }, { t: 'stun', tgt: 'target', v: [0.75, 1, 1.25] }] }],
+  ['skeleton',   '해골 병사',   '🦴', 1, 'wraith', ['guardian'], { name: '뼈 방패', fx: [{ t: 'shield', tgt: 'self', v: [320, 450, 700], dur: 4 }] }],
+  ['bat',        '흡혈 박쥐',   '🦇', 1, 'wraith', ['assassin'], { name: '흡혈', fx: [{ t: 'dmg', tgt: 'target', v: [190, 285, 440] }, { t: 'heal', tgt: 'self', v: [110, 160, 260] }] }],
+  ['cogbot',     '톱니 로봇',   '🤖', 1, 'mech',   ['guardian'], { name: '강철 외피', fx: [{ t: 'buff', tgt: 'self', stat: 'armor', v: [40, 60, 100], dur: 4 }, { t: 'shield', tgt: 'self', v: [200, 300, 460], dur: 4 }] }],
+  ['drone',      '정찰 드론',   '🛸', 1, 'mech',   ['sniper'],   { name: '표적 레이저', fx: [{ t: 'dmg', tgt: 'target', v: [210, 315, 500] }] }],
+  ['stargazer',  '견습 점성가', '🧙', 1, 'star',   ['mystic'],   { name: '별똥별', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [150, 225, 360] }] }],
+  ['pixie',      '별빛 요정',   '🧚', 1, 'star',   ['healer'],   { name: '별가루', fx: [{ t: 'heal', tgt: 'lowestAllies', n: 2, v: [150, 220, 350] }] }],
+  // ── 2코스트 (10)
+  ['firewitch',  '화염 마녀',   '🧙‍♀️', 2, 'fire',  ['mystic'],   { name: '화염구', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [220, 330, 520] }, { t: 'burn', tgt: 'area', r: 1, v: [25, 35, 55], dur: 3 }] }],
+  ['firehawk',   '화염 매',     '🦅', 2, 'fire',   ['assassin'], { name: '급강하', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'target', v: [220, 330, 520] }] }],
+  ['icewolf',    '얼음 늑대',   '🐺', 2, 'frost',  ['assassin'], { name: '서리 송곳니', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [260, 390, 600] }, { t: 'slow', tgt: 'target', v: [0.4, 0.45, 0.55], dur: 2 }] }],
+  ['yeti',       '설인',        '🦍', 2, 'frost',  ['vanguard'], { name: '대지 강타', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [170, 255, 400] }, { t: 'slow', tgt: 'selfArea', r: 1, v: [0.3, 0.35, 0.45], dur: 3 }] }],
+  ['mushroom',   '버섯 수호자', '🍄', 2, 'forest', ['guardian'], { name: '포자 구름', fx: [{ t: 'heal', tgt: 'self', v: [260, 390, 620] }, { t: 'dmg', tgt: 'selfArea', r: 1, v: [80, 120, 190] }] }],
+  ['deer',       '사슴 궁수',   '🦌', 2, 'forest', ['sniper'],   { name: '관통 화살', fx: [{ t: 'dmg', tgt: 'target', kind: 'phys', v: [280, 420, 660] }] }],
+  ['banshee',    '밴시',        '😱', 2, 'wraith', ['mystic'],   { name: '비명', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [190, 285, 450] }, { t: 'stun', tgt: 'area', r: 1, v: [0.5, 0.6, 0.8] }] }],
+  ['ghoul',      '구울',        '🧟', 2, 'wraith', ['vanguard'], { name: '물어뜯기', fx: [{ t: 'dmg', tgt: 'target', v: [190, 285, 450] }, { t: 'heal', tgt: 'self', v: [160, 240, 380] }] }],
+  ['golem',      '강철 골렘',   '🦾', 2, 'mech',   ['vanguard'], { name: '충격파', fx: [{ t: 'dmg', tgt: 'target', v: [160, 240, 380] }, { t: 'stun', tgt: 'target', v: [1.25, 1.5, 1.75] }] }],
+  ['comet',      '혜성 기사',   '☄️', 2, 'star',   ['assassin'], { name: '혜성 일격', fx: [{ t: 'leap', tgt: 'farthestEnemy' }, { t: 'dmg', tgt: 'target', v: [230, 345, 540] }] }],
+  // ── 3코스트 (8)
+  ['lavagiant',  '용암 거인',   '🌋', 3, 'fire',   ['guardian'], { name: '분화', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [250, 375, 700] }, { t: 'burn', tgt: 'selfArea', r: 1, v: [35, 50, 90], dur: 3 }, { t: 'shield', tgt: 'self', v: [300, 450, 800], dur: 4 }] }],
+  ['icemage',    '빙결 술사',   '🥶', 3, 'frost',  ['mystic'],   { name: '눈보라', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [270, 405, 720] }, { t: 'stun', tgt: 'area', r: 1, v: [1, 1.1, 1.4] }] }],
+  ['treant',     '고목 수호자', '🌲', 3, 'forest', ['guardian', 'healer'], { name: '뿌리 치유', fx: [{ t: 'heal', tgt: 'allAllies', v: [110, 165, 320] }, { t: 'shield', tgt: 'self', v: [250, 375, 700], dur: 4 }] }],
+  ['vampire',    '흡혈귀',      '🧛', 3, 'wraith', ['assassin'], { name: '피의 향연', fx: [{ t: 'dmg', tgt: 'target', v: [340, 510, 950] }, { t: 'heal', tgt: 'self', v: [200, 300, 560] }] }],
+  ['starhunter', '별 사냥꾼',   '🔭', 3, 'star',   ['sniper'],   { name: '별빛 저격', fx: [{ t: 'dmg', tgt: 'lowestEnemy', v: [360, 540, 980] }] }],
+  ['cannon',     '포격 기계',   '💣', 3, 'mech',   ['sniper'],   { name: '포격', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [250, 375, 700] }] }],
+  ['repairbot',  '수리 로봇',   '🔧', 3, 'mech',   ['healer'],   { name: '긴급 수리', fx: [{ t: 'shield', tgt: 'lowestAllies', n: 2, v: [260, 390, 720], dur: 4 }] }],
+  ['moonpriest', '달의 사제',   '🌙', 3, 'star',   ['healer'],   { name: '월광', fx: [{ t: 'heal', tgt: 'allAllies', v: [130, 195, 360] }] }],
+  // ── 4코스트 (6)
+  ['dragon',     '화염룡',      '🐉', 4, 'fire',   ['mystic'],   { name: '용의 숨결', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [420, 630, 1800] }, { t: 'burn', tgt: 'area', r: 1, v: [60, 90, 200], dur: 3 }] }],
+  ['frostgiant', '서리 거인',   '🧊', 4, 'frost',  ['guardian'], { name: '빙하 강타', fx: [{ t: 'dmg', tgt: 'selfArea', r: 1, v: [220, 330, 900] }, { t: 'stun', tgt: 'selfArea', r: 1, v: [1.5, 1.75, 3] }, { t: 'shield', tgt: 'self', v: [500, 750, 2000], dur: 4 }] }],
+  ['ranger',     '엘프 레인저', '🧝‍♂️', 4, 'forest', ['sniper'], { name: '연속 사격', fx: [{ t: 'buff', tgt: 'self', stat: 'as', v: [0.6, 0.8, 2], dur: 5 }, { t: 'dmg', tgt: 'target', kind: 'phys', v: [260, 390, 1100] }] }],
+  ['reaper',     '사신',        '☠️', 4, 'wraith', ['vanguard', 'assassin'], { name: '수확', fx: [{ t: 'execute', tgt: 'target', v: [0.2, 0.25, 0.5] }, { t: 'dmg', tgt: 'target', v: [460, 690, 2000] }] }],
+  ['thunder',    '벼락 기갑',   '⚡', 4, 'mech',   ['mystic'],   { name: '연쇄 번개', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 4, v: [290, 435, 1300] }, { t: 'stun', tgt: 'last', v: [0.5, 0.6, 1.5] }] }],
+  ['starknight', '성좌 기사',   '🌟', 4, 'star',   ['guardian'], { name: '성좌의 가호', fx: [{ t: 'shield', tgt: 'allAllies', v: [210, 315, 900], dur: 4 }] }],
+  // ── 5코스트 (4)
+  ['sunphoenix', '태양 불사조', '🌞', 5, 'fire',   ['sniper'],   { name: '태양 화살', fx: [{ t: 'dmg', tgt: 'area', r: 1, v: [620, 930, 9999] }, { t: 'burn', tgt: 'area', r: 1, v: [80, 120, 500], dur: 4 }] }],
+  ['winterqueen','겨울 여왕',   '👸', 5, 'frost',  ['mystic'],   { name: '영원한 겨울', fx: [{ t: 'dmg', tgt: 'allEnemies', v: [260, 390, 2000] }, { t: 'stun', tgt: 'allEnemies', v: [1.5, 2, 6] }] }],
+  ['worldtree',  '세계수',      '🌳', 5, 'forest', ['healer'],   { name: '숲의 부름', fx: [{ t: 'summon', unit: 'sapling', n: 2 }, { t: 'heal', tgt: 'allAllies', v: [160, 240, 1000] }] }],
+  ['lich',       '리치 왕',     '💀', 5, 'wraith', ['mystic'],   { name: '죽음의 손길', fx: [{ t: 'dmg', tgt: 'randomEnemies', n: 3, v: [520, 780, 3000] }] }],
+];
+
+const UNITS = {};
+for (const [id, name, emoji, cost, origin, roles, skill] of UNIT_LIST) {
+  const a = ARCHETYPE[roles[0]];
+  const range = a.range;
+  UNITS[id] = {
+    id, name, emoji, cost, origin, roles, skill,
+    traits: [origin, ...roles],
+    hp: Math.round(COST_HP[cost] * a.hp / 10) * 10,
+    atk: Math.round(COST_ATK[cost] * a.atk),
+    as: a.as, range, armor: a.armor, mr: a.mr,
+    mana: a.mana, startMana: a.start, crit: a.crit,
+  };
+}
+// 소환/중립 몬스터 전용 정의 (상점에 나오지 않음)
+const EXTRA_UNITS = {
+  sapling: { id: 'sapling', name: '묘목', emoji: '🌿', cost: 0, origin: null, roles: [], traits: [], hp: 500, atk: 40, as: 0.7, range: 1, armor: 30, mr: 30, mana: 999, startMana: 0, crit: 0, skill: null, summon: true },
+  m_slime:  { id: 'm_slime',  name: '슬라임',   emoji: '🟢', cost: 0, traits: [], roles: [], hp: 300, atk: 22, as: 0.6, range: 1, armor: 5,  mr: 5,  mana: 999, startMana: 0, crit: 0, skill: null },
+  m_wolf:   { id: 'm_wolf',   name: '들개',     emoji: '🐕', cost: 0, traits: [], roles: [], hp: 520, atk: 45, as: 0.8, range: 1, armor: 15, mr: 10, mana: 999, startMana: 0, crit: 0.1, skill: null },
+  m_rock:   { id: 'm_rock',   name: '바위 골렘', emoji: '🗿', cost: 0, traits: [], roles: [], hp: 1300, atk: 60, as: 0.5, range: 1, armor: 60, mr: 30, mana: 999, startMana: 0, crit: 0, skill: null },
+  m_raptor: { id: 'm_raptor', name: '랩터',     emoji: '🦖', cost: 0, traits: [], roles: [], hp: 950, atk: 85, as: 0.8, range: 1, armor: 30, mr: 20, mana: 999, startMana: 0, crit: 0.15, skill: null },
+  m_wyvern: { id: 'm_wyvern', name: '와이번',   emoji: '🐲', cost: 0, traits: [], roles: [], hp: 1500, atk: 110, as: 0.7, range: 2, armor: 40, mr: 40, mana: 999, startMana: 0, crit: 0.1, skill: null },
+  m_elder:  { id: 'm_elder',  name: '고대 용',  emoji: '🐉', cost: 0, traits: [], roles: [], hp: 6000, atk: 180, as: 0.6, range: 2, armor: 70, mr: 70, mana: 999, startMana: 0, crit: 0.1, skill: null },
+};
+function unitDef(id) { return UNITS[id] || EXTRA_UNITS[id]; }
+
+/* ===== 02-data2.js ===== */
+/* =====================================================================
+ * 02. 데이터 테이블 (아이템 · 주문 · 군주 유형 · 증강 · AI 군주 · 몬스터)
+ * ===================================================================== */
+
+/* ---------- 아이템 ---------- */
+const COMPONENTS = {
+  sword: { name: '검',     icon: '🗡️', stats: { atk: 15 },      desc: '공격력 +15' },
+  bow:   { name: '활',     icon: '🏹', stats: { as: 0.15 },     desc: '공격 속도 +15%' },
+  armor: { name: '갑옷',   icon: '🛡️', stats: { armor: 25 },    desc: '방어력 +25' },
+  cloak: { name: '망토',   icon: '🧥', stats: { mr: 25 },       desc: '마법 저항 +25' },
+  rod:   { name: '지팡이', icon: '🪄', stats: { ap: 15 },       desc: '스킬 피해 +15%' },
+  tear:  { name: '눈물',   icon: '💧', stats: { mana: 15 },     desc: '시작 마나 +15' },
+  belt:  { name: '허리띠', icon: '🎗️', stats: { hp: 150 },      desc: '체력 +150' },
+  glove: { name: '장갑',   icon: '🧤', stats: { crit: 0.15 },   desc: '치명타 +15%' },
+};
+const COMP_KEYS = Object.keys(COMPONENTS);
+
+// 고유 효과가 있는 완성 아이템 20종 (나머지 16종은 수치 합산)
+const UNIQUE_ITEMS = {
+  'sword+sword': { name: '거인의 대검',   icon: '⚔️', fx: 'dmgAmp',     desc: '주는 피해 +15%' },
+  'bow+sword':   { name: '질풍의 칼날',   icon: '🌪️', fx: 'asRamp',     desc: '공격할 때마다 공격 속도 +6% (최대 10회)' },
+  'armor+sword': { name: '수호천사',      icon: '👼', fx: 'revive',     desc: '처음 죽을 때 1초 후 체력 400으로 부활' },
+  'cloak+sword': { name: '흡혈의 낫',     icon: '🩸', fx: 'lifesteal',  desc: '공격 피해의 25% 회복' },
+  'rod+sword':   { name: '마법검',        icon: '🗡', fx: 'spellVamp',  desc: '스킬 피해의 20% 회복' },
+  'sword+tear':  { name: '쇼진의 창',     icon: '🔱', fx: 'manaHit',    desc: '공격 시 마나 +6 추가' },
+  'belt+sword':  { name: '광전사의 도끼', icon: '🪓', fx: 'rage',       desc: '체력 50% 이하일 때 공격력 +35%' },
+  'glove+sword': { name: '무한의 검',     icon: '🗡️', fx: 'critDmg',    desc: '치명타 피해 +40%' },
+  'bow+bow':     { name: '붉은 덩굴',     icon: '🌹', fx: 'burnHit',    desc: '공격 시 대상에게 화상 (초당 20, 3초)' },
+  'bow+rod':     { name: '번개 지팡이',   icon: '🌩️', fx: 'zap',        desc: '3번째 공격마다 대상 포함 3명에게 마법 피해 70' },
+  'armor+armor': { name: '가시 갑옷',     icon: '🌵', fx: 'thorns',     desc: '피격 시 공격자에게 마법 피해 25' },
+  'armor+belt':  { name: '솔라리 펜던트', icon: '📿', fx: 'locket',     desc: '전투 시작 시 주변 아군에게 보호막 200' },
+  'cloak+cloak': { name: '침묵의 망토',   icon: '🧣', fx: 'ccImmune',   desc: '기절·빙결에 면역' },
+  'armor+tear':  { name: '얼어붙은 심장', icon: '💠', fx: 'frostAura',  desc: '주변 2칸 적 공격 속도 -25%' },
+  'rod+rod':     { name: '죽음의 모자',   icon: '🎩', fx: 'bigAp',      desc: '스킬 피해 +40% 추가' },
+  'rod+tear':    { name: '군주의 인장',   icon: '🔆', fx: 'seal',       desc: '이 유닛이 아군 주문 대상이 되면 효과 +30%' },
+  'tear+tear':   { name: '푸른 파수꾼',   icon: '🔵', fx: 'blueBuff',   desc: '스킬 사용 후 마나 25 회복' },
+  'belt+belt':   { name: '워모그 갑옷',   icon: '💚', fx: 'regen',      desc: '매 초 최대 체력의 3% 회복' },
+  'glove+glove': { name: '도적의 장갑',   icon: '🎭', fx: 'dodge',      desc: '공격을 20% 확률로 회피' },
+  'glove+rod':   { name: '보석 건틀릿',   icon: '💍', fx: 'skillCrit',  desc: '스킬이 치명타로 적중할 수 있음' },
+};
+function itemKey(a, b) { return [a, b].sort().join('+'); }
+function itemInfo(item) {
+  // item: 'sword' (재료) 또는 'bow+sword' (완성)
+  if (COMPONENTS[item]) {
+    const c = COMPONENTS[item];
+    return { name: c.name, icon: c.icon, desc: c.desc, stats: { ...c.stats }, fx: null, component: true };
+  }
+  const [a, b] = item.split('+');
+  const stats = {};
+  for (const k of [a, b]) for (const [s, v] of Object.entries(COMPONENTS[k].stats)) stats[s] = (stats[s] || 0) + v * 1.2;
+  const u = UNIQUE_ITEMS[item];
+  if (u) return { name: u.name, icon: u.icon, desc: u.desc, stats, fx: u.fx, component: false };
+  return { name: `${COMPONENTS[a].name}·${COMPONENTS[b].name} 합성구`, icon: '🔶', desc: '재료 능력치 합산(×1.2)', stats, fx: null, component: false };
+}
+function statText(stats) {
+  const L = { atk: '공격력', as: '공속', armor: '방어', mr: '마저', ap: '스킬피해', mana: '마나', hp: '체력', crit: '치명' };
+  return Object.entries(stats).map(([k, v]) => {
+    const pct = (k === 'as' || k === 'crit');
+    return `${L[k]} +${pct ? Math.round(v * 100) + '%' : Math.round(v)}${k === 'ap' ? '%' : ''}`;
+  }).join(', ');
+}
+
+/* ---------- 군주 주문 ---------- */
+// target: ally | enemy | none | row | cell | ally2 (아군 둘) | allyCell (아군 + 빈 칸)
+// v: [1단계, 2단계, 3단계], costDown: 단계별 마나 감소, up: 강화 비용(→2단계, →3단계)
+const SPELLS = {
+  shield:     { name: '방패의 기도', icon: '🛡️', kind: 'def', cost: 3, cd: 6,  target: 'ally',  up: [3, 4], costDown: [0, 0, 1],
+                fx: [{ t: 'shieldPct', v: [0.40, 0.50, 0.60], dur: 3 }], desc: v => `아군 1명에게 최대 체력 ${pctS(v)}만큼 3초 보호막`, auto: ['allyLow40', 'asap'] },
+  bolt:       { name: '번개 낙인',   icon: '⚡', kind: 'atk', cost: 4, cd: 8,  target: 'enemy', up: [3, 4], costDown: [0, 0, 0],
+                fx: [{ t: 'dmg', v: [200, 280, 360] }, { t: 'stun', v: [1.5, 1.5, 1.75] }], desc: v => `적 1명에게 마법 피해 ${v}, 1.5초 기절`, auto: ['enemyMana80', 'enemyCarry', 'enemyLowest'] },
+  march:      { name: '진군 명령',   icon: '📯', kind: 'atk', cost: 4, cd: 12, target: 'none',  up: [4, 5], costDown: [0, 0, 1],
+                fx: [{ t: 'buffAll', stat: 'as', v: [0.35, 0.45, 0.50], dur: 5 }], desc: v => `아군 전체 공격 속도 +${pctS(v)}, 5초`, auto: ['midFight', 'losing'] },
+  swap:       { name: '후퇴 신호',   icon: '🔁', kind: 'ctl', cost: 3, cd: 8,  target: 'ally2', up: [3, 4], costDown: [0, 1, 1],
+                fx: [{ t: 'swap', v: [150, 250, 350] }], desc: v => `아군 2명의 위치를 맞바꾸고 둘 다 보호막 ${v}`, auto: ['swapTank'] },
+  managift:   { name: '마나 선물',   icon: '💎', kind: 'ctl', cost: 5, cd: 15, target: 'ally',  up: [4, 5], costDown: [0, 1, 2],
+                fx: [{ t: 'fillMana', v: [1, 1, 1] }], desc: () => '아군 1명의 스킬 마나를 즉시 채움', auto: ['carryMana'] },
+  firewall:   { name: '불의 장막',   icon: '🔥', kind: 'atk', cost: 6, cd: 12, target: 'row',   up: [4, 6], costDown: [0, 0, 1],
+                fx: [{ t: 'zone', v: [90, 120, 150], dur: 3 }], desc: v => `지정한 가로 1줄에 3초간 화염 지대 (초당 ${v})`, auto: ['rowMost'] },
+  timestop:   { name: '시간 정지',   icon: '⏳', kind: 'ctl', cost: 8, once: true, target: 'none', up: [5, 6], costDown: [0, 0, 1],
+                fx: [{ t: 'freezeAll', v: [2, 2.25, 2.5] }], desc: v => `적 전체 ${v}초 정지 (전투당 1회)`, auto: ['enemySkills', 'losing'] },
+  resolve:    { name: '마지막 결의', icon: '🕯️', kind: 'def', cost: 7, once: true, target: 'ally', up: [5, 6], costDown: [0, 0, 1],
+                fx: [{ t: 'undying', v: [3, 3.5, 4] }], desc: v => `아군 1명이 ${v}초간 죽지 않음 (전투당 1회)`, auto: ['allyDying'] },
+  healrain:   { name: '치유의 비',   icon: '🌧️', kind: 'def', cost: 5, cd: 10, target: 'none',  up: [4, 5], costDown: [0, 0, 1],
+                fx: [{ t: 'healAllPct', v: [0.18, 0.24, 0.30] }], desc: v => `아군 전체 최대 체력 ${pctS(v)} 회복`, auto: ['teamLow'] },
+  frostward:  { name: '서리 결계',   icon: '❄️', kind: 'ctl', cost: 5, cd: 10, target: 'cell',  up: [3, 5], costDown: [0, 0, 1],
+                fx: [{ t: 'slowArea', v: [0.35, 0.45, 0.55], dur: 3 }], desc: v => `3×3 범위 적 공격·이동 속도 -${pctS(v)}, 3초`, auto: ['enemyClump'] },
+  meteor:     { name: '유성 낙하',   icon: '☄️', kind: 'atk', cost: 6, cd: 12, target: 'cell',  up: [4, 6], costDown: [0, 0, 0],
+                fx: [{ t: 'dmgArea', v: [190, 260, 340] }], desc: v => `3×3 범위에 마법 피해 ${v}`, auto: ['enemyClump'] },
+  warcry:     { name: '분노의 함성', icon: '📣', kind: 'atk', cost: 3, cd: 8,  target: 'ally',  up: [3, 4], costDown: [0, 0, 0],
+                fx: [{ t: 'buffPct', stat: 'atk', v: [0.60, 0.80, 1.00], dur: 5 }], desc: v => `아군 1명 공격력 +${pctS(v)}, 5초`, auto: ['carryFight', 'asap'] },
+  shadowstep: { name: '그림자 걸음', icon: '👣', kind: 'ctl', cost: 4, cd: 10, target: 'allyCell', up: [3, 4], costDown: [0, 1, 1],
+                fx: [{ t: 'teleport', v: [150, 250, 350] }], desc: v => `아군 1명을 지정한 빈 칸으로 순간이동, 보호막 ${v}`, auto: ['rescueLow'] },
+  taunt:      { name: '도발의 깃발', icon: '🚩', kind: 'def', cost: 3, cd: 10, target: 'ally',  up: [3, 4], costDown: [0, 0, 1],
+                fx: [{ t: 'taunt', v: [50, 75, 100], dur: 3 }], desc: v => `아군 1명이 3초간 주변 2칸 적을 도발, 방어·마저 +${v}`, auto: ['tankFront'] },
+  sunder:     { name: '약점 간파',   icon: '🎯', kind: 'atk', cost: 4, cd: 10, target: 'enemy', up: [3, 5], costDown: [0, 0, 0],
+                fx: [{ t: 'sunder', v: [0.30, 0.40, 0.50], dur: 4 }], desc: v => `적 1명 방어력 -50%, 받는 피해 +${pctS(v)}, 4초`, auto: ['enemyFront', 'enemyCarry'] },
+  reap:       { name: '영혼 수확',   icon: '🌑', kind: 'atk', cost: 6, cd: 15, target: 'enemy', up: [4, 6], costDown: [0, 0, 0],
+                fx: [{ t: 'reap', v: [0.30, 0.35, 0.40] }], desc: v => `체력 ${pctS(v)} 이하 적 처형, 아니면 마법 피해 200`, auto: ['enemyExecute'] },
+};
+const SPELL_KEYS = Object.keys(SPELLS);
+function pctS(v) { return Math.round(v * 100) + '%'; }
+function spellCost(id, lvl) { return SPELLS[id].cost - SPELLS[id].costDown[lvl - 1]; }
+function spellDesc(id, lvl) { return SPELLS[id].desc(SPELLS[id].fx[0].v[lvl - 1]); }
+
+const AUTO_RULES = {
+  off:          '자동 시전 안 함',
+  asap:         '마나가 차면 즉시',
+  allyLow40:    '체력 40% 이하 아군 중 아이템이 가장 많은 유닛에게',
+  enemyMana80:  '마나가 80% 이상 찬 적에게',
+  enemyCarry:   '아이템·코스트가 가장 높은 적에게',
+  enemyLowest:  '체력이 가장 낮은 적에게',
+  midFight:     '전투 3초 후',
+  losing:       '아군 수가 적보다 적을 때',
+  swapTank:     '앞줄 아군 체력 35% 이하 시 뒷줄 튼튼한 아군과 교체',
+  carryMana:    '마나 50% 미만인 핵심 딜러에게',
+  rowMost:      '적이 3명 이상 모인 줄에',
+  enemySkills:  '적 2명 이상이 스킬을 쓰기 직전일 때',
+  allyDying:    '체력 25% 이하 핵심 아군에게',
+  teamLow:      '아군 평균 체력 60% 이하일 때',
+  enemyClump:   '적 3명 이상 뭉친 곳에',
+  carryFight:   '교전 중인 핵심 딜러에게',
+  rescueLow:    '체력 35% 이하 아군을 안전한 곳으로',
+  tankFront:    '뒷줄 아군이 공격받을 때 가장 튼튼한 아군에게',
+  enemyFront:   '체력이 가장 높은 적에게',
+  enemyExecute: '처형 가능한 적이 생기면',
+};
+
+/* ---------- 군주 유형 ---------- */
+const LORD_TYPES = {
+  war:    { name: '전쟁 군주', icon: '⚔️', spells: ['bolt', 'warcry'],    passive: '주문 피해 +15%',              desc: '공격형 주문으로 적의 핵심을 끊어낸다.' },
+  guard:  { name: '수호 군주', icon: '🛡️', spells: ['shield', 'healrain'], passive: '아군 보호막 주문 지속 시간 +1초', desc: '방어형 주문으로 아군을 끝까지 지킨다.' },
+  tactic: { name: '책략 군주', icon: '♟️', spells: ['swap', 'frostward'],  passive: '전투의 첫 주문 마나 비용 -2',   desc: '위치·제어형 주문으로 전장을 뒤흔든다.' },
+};
+
+/* ---------- 증강 (30종, 주문 관련 8종) ---------- */
+const AUGMENTS = {
+  income:      { name: '영지 세금',      icon: '💰', desc: '매 라운드 골드 +1' },
+  emblem:      { name: '계열 문장',      icon: '🎖️', desc: '{trait} 시너지 요구 인원 -1', param: 'trait' },
+  frontline:   { name: '최전선',         icon: '🧱', desc: '앞줄 유닛 체력 +20%' },
+  cheapRoll:   { name: '값싼 새로고침',  icon: '🔄', desc: '상점 새로고침 비용 1골드' },
+  bigBoard:    { name: '대군주의 위엄',  icon: '👑', desc: '보드에 올릴 수 있는 유닛 +1' },
+  scholar:     { name: '학구열',         icon: '📚', desc: '매 라운드 경험치 +2' },
+  bigInterest: { name: '복리',           icon: '🏦', desc: '이자 최대치 7골드' },
+  backline:    { name: '후방 지원',      icon: '🎯', desc: '뒤쪽 2줄 유닛 공격력 +15%' },
+  streakPlus:  { name: '기세',           icon: '🔥', desc: '연승·연패 보너스 +1골드' },
+  loot:        { name: '전리품',         icon: '🎁', desc: '즉시 재료 아이템 2개 획득' },
+  cash:        { name: '비상금',         icon: '💵', desc: '즉시 15골드 획득' },
+  critAll:     { name: '날카로운 칼날',  icon: '🔪', desc: '모든 아군 치명타 확률 +15%' },
+  armorAll:    { name: '철벽',           icon: '🏰', desc: '모든 아군 방어력·마법 저항 +20' },
+  apAll:       { name: '마력 증폭',      icon: '🌀', desc: '모든 아군 스킬 피해 +20%' },
+  regenAll:    { name: '재생의 축복',    icon: '💗', desc: '모든 아군 매 초 체력 1.5% 회복' },
+  manaStart:   { name: '선수 필승',      icon: '🥇', desc: '모든 아군 시작 마나 +20' },
+  heartyHP:    { name: '군주의 활력',    icon: '❤️', desc: '즉시 군주 체력 +20' },
+  swift:       { name: '신속',           icon: '💨', desc: '모든 아군 공격 속도 +15%' },
+  giant:       { name: '거인화',         icon: '🦣', desc: '모든 아군 체력 +12%' },
+  freeRoll:    { name: '행운의 상점',    icon: '🍀', desc: '매 라운드 첫 새로고침 무료' },
+  hire:        { name: '용병 계약',      icon: '📜', desc: '즉시 무작위 3코스트 유닛 2개 획득' },
+  lifesteal:   { name: '피의 계약',      icon: '🧛', desc: '모든 아군 공격 피해의 10% 회복' },
+  // 주문 관련 8종
+  spellSlot:   { name: '비전 확장',      icon: '📖', desc: '주문 슬롯 +1, 대신 경험치 구매 비용 +1골드', spell: true },
+  manaHead:    { name: '선제 마나',      icon: '🔋', desc: '전투 시작 시 군주 마나 3으로 시작', spell: true },
+  manaSpring:  { name: '마나의 샘',      icon: '⛲', desc: '군주 마나 회복 속도 +30%', spell: true },
+  spellHone:   { name: '주문 연마',      icon: '⚒️', desc: '보유 주문 전부 1단계 무료 강화', spell: true },
+  library:     { name: '비전 서고',      icon: '🏛️', desc: '무작위 주문 2장 획득', spell: true },
+  sacrifice:   { name: '희생의 메아리',  icon: '🕊️', desc: '아군이 처치될 때 군주 마나 +2 (기본 +1)', spell: true },
+  spellAmp:    { name: '주문 증폭',      icon: '📡', desc: '모든 주문 효과 +20%', spell: true },
+  quickCast:   { name: '신속 시전',      icon: '⏱️', desc: '주문 재사용 대기 시간 -30%', spell: true },
+};
+const AUG_KEYS = Object.keys(AUGMENTS);
+
+/* ---------- AI 군주 명단 (12명 중 매 판 7명) ---------- */
+// 성향: econ 경제, level 레벨, commit 집착도, reroll 리롤, spell 주문
+const LORD_ROSTER = [
+  { name: '사자왕 레오닉',     emoji: '🦁', type: 'war',    p: { econ: .2,  level: .8,  commit: .6, reroll: .1,  spell: .3 },  fav: ['vanguard', 'fire'],     style: '초반부터 몰아붙이는 군주' },
+  { name: '독사 베리스',       emoji: '🐍', type: 'tactic', p: { econ: .3,  level: .15, commit: .8, reroll: .95, spell: .4 },  fav: ['wraith', 'assassin'],   style: '1코스트 3성만 노리는 군주' },
+  { name: '현자 오르웬',       emoji: '🦉', type: 'tactic', p: { econ: .95, level: .7,  commit: .6, reroll: .1,  spell: .6 },  fav: ['star', 'mystic'],       style: '끝까지 버티다 후반에 폭발하는 군주' },
+  { name: '곰 족장 브루노',    emoji: '🐻', type: 'guard',  p: { econ: .5,  level: .5,  commit: .7, reroll: .3,  spell: .3 },  fav: ['guardian', 'forest'],   style: '단단한 앞줄로 버티는 군주' },
+  { name: '여우 책사 미레',    emoji: '🦊', type: 'tactic', p: { econ: .5,  level: .5,  commit: .3, reroll: .4,  spell: .95 }, fav: ['frost', 'mystic'],      style: '주문으로 판을 흔드는 군주' },
+  { name: '늑대 여왕 카야',    emoji: '🐺', type: 'war',    p: { econ: .2,  level: .6,  commit: .5, reroll: .5,  spell: .5 },  fav: ['frost', 'assassin'],    style: '빠른 암살로 뒷줄을 노리는 군주' },
+  { name: '용의 군주 드라칸',  emoji: '🐲', type: 'war',    p: { econ: .9,  level: .95, commit: .4, reroll: .1,  spell: .4 },  fav: ['fire', 'mystic'],       style: '고코스트 유닛으로 후반을 노리는 군주' },
+  { name: '일각수 성녀 엘린',  emoji: '🦄', type: 'guard',  p: { econ: .6,  level: .5,  commit: .6, reroll: .3,  spell: .8 },  fav: ['healer', 'star'],       style: '치유와 주문으로 버티는 군주' },
+  { name: '심해 군주 크라켄',  emoji: '🐙', type: 'guard',  p: { econ: .7,  level: .6,  commit: .5, reroll: .2,  spell: .5 },  fav: ['mech', 'guardian'],     style: '기계 보호막으로 밀어붙이는 군주' },
+  { name: '전갈왕 시르',       emoji: '🦂', type: 'war',    p: { econ: .1,  level: .4,  commit: .7, reroll: .9,  spell: .3 },  fav: ['assassin', 'mech'],     style: '저코스트 리롤로 초반을 장악하는 군주' },
+  { name: '공작 귀부인 루미아', emoji: '🦚', type: 'tactic', p: { econ: .8,  level: .8,  commit: .3, reroll: .2,  spell: .7 },  fav: ['star', 'sniper'],       style: '상점 흐름을 읽고 방향을 트는 군주' },
+  { name: '늪지 마녀 고르바',  emoji: '🐸', type: 'guard',  p: { econ: .4,  level: .4,  commit: .9, reroll: .6,  spell: .6 },  fav: ['forest', 'healer'],     style: '한 방향을 끝까지 고집하는 군주' },
+];
+
+/* ---------- 중립 몬스터 라운드 ---------- */
+// [유닛, 행, 열] — 몬스터 쪽 로컬 좌표(행 0 = 앞줄)
+const MONSTER_WAVES = {
+  1: [['m_slime', 0, 2], ['m_slime', 0, 4]],
+  2: [['m_slime', 0, 1], ['m_slime', 0, 3], ['m_slime', 0, 5]],
+  3: [['m_wolf', 0, 2], ['m_slime', 0, 4], ['m_wolf', 1, 3]],
+  s2: [['m_wolf', 0, 1], ['m_wolf', 0, 3], ['m_wolf', 0, 5], ['m_wolf', 1, 3]],
+  s3: [['m_rock', 0, 2], ['m_rock', 0, 4], ['m_wolf', 1, 1], ['m_wolf', 1, 5]],
+  s4: [['m_raptor', 0, 2], ['m_raptor', 0, 4], ['m_raptor', 1, 3], ['m_wolf', 0, 0], ['m_wolf', 0, 6]],
+  s5: [['m_wyvern', 1, 2], ['m_wyvern', 1, 4], ['m_raptor', 0, 3], ['m_rock', 0, 1], ['m_rock', 0, 5]],
+  s6: [['m_elder', 1, 3], ['m_raptor', 0, 2], ['m_raptor', 0, 4]],
+};
+
+const DIFFICULTY = {
+  easy:   { name: '쉬움',   noise: 0.6,  misplace: 0.35, castDelay: 2.5, counter: false },
+  normal: { name: '보통',   noise: 0.25, misplace: 0.1,  castDelay: 0.8, counter: false },
+  hard:   { name: '어려움', noise: 0,    misplace: 0,    castDelay: 0,   counter: true  },
+};
+
+/* ===== 03-combat.js ===== */
+/* =====================================================================
+ * 03. 전투 엔진 (1/2) — 준비, 능력치 계산, 피해·회복 같은 효과 기본 단위
+ *     화면 그리기와 완전히 분리되어 있어 플레이어 전투(애니메이션)와
+ *     AI끼리의 전투(화면 없이)를 같은 코드로 돌린다.
+ * ===================================================================== */
+
+const GROWS = 8, GCOLS = 7;
+// side 0 = 아래쪽(행 4~7), side 1 = 위쪽(행 0~3). 로컬 행 0이 앞줄.
+function toGlobal(side, r, c) { return side === 0 ? [4 + r, c] : [3 - r, 6 - c]; }
+
+/*
+ * 진영 명세(spec):
+ * { name, emoji, isPlayer, units:[{defId,star,items,r,c}], traits:{}, aug:[{id,param}],
+ *   lordType, spells:[{id,lvl,rule}], ai:{tend,castDelay,mult}|null, forceAuto, monsterScale }
+ */
+function createBattle(specA, specB, seed, opts = {}) {
+  const B = {
+    tick: 0, maxTick: Math.round(CFG.BATTLE_TIME / CFG.TICK),
+    rng: new RNG(seed), units: [], zones: [], ev: [], queue: [], log: [],
+    occ: Array.from({ length: GROWS }, () => new Array(GCOLS).fill(0)),
+    headless: !!opts.headless, over: false, result: null, uidN: 1,
+    amp: 1, // 연장전 피해 배율
+  };
+  B.sides = [makeSideState(specA, 0), makeSideState(specB, 1)];
+  for (const S of B.sides) {
+    for (const s of S.spec.units) {
+      const [gr, gc] = toGlobal(S.idx, s.r, s.c);
+      if (B.occ[gr][gc]) continue;
+      spawnUnit(B, S.idx, s.defId, s.star, s.items || [], gr, gc, s.r, S.spec.monsterScale || 1);
+    }
+  }
+  startEffects(B);
+  return B;
+}
+
+function makeSideState(spec, idx) {
+  const aug = new Set((spec.aug || []).map(a => a.id));
+  const tiers = {};
+  for (const t of TRAIT_KEYS) tiers[t] = traitTier(t, (spec.traits || {})[t] || 0);
+  const S = {
+    idx, spec, name: spec.name, emoji: spec.emoji, isPlayer: !!spec.isPlayer, tiers, aug,
+    lordType: spec.lordType, lm: aug.has('manaHead') ? 3 : 0,
+    lmRegen: (tiers.star === 3 ? 1.6 : 1) * (aug.has('manaSpring') ? 1.3 : 1),
+    healAmp: 1 + [0, 0.25, 0.5, 0.9][tiers.healer],
+    spellDmgMult: 1 + (spec.lordType === 'war' ? 0.15 : 0) + [0, 0, 0.15, 0.3][tiers.mystic],
+    spellMult: aug.has('spellAmp') ? 1.2 : 1,
+    spells: (spec.spells || []).map(s => ({ id: s.id, lvl: s.lvl, rule: s.rule || 'off', cd: 0, used: false })),
+    castCount: 0, forceAuto: !!spec.forceAuto, ai: spec.ai || null, aiWait: 0, aiArmed: false,
+    stats: { spellDmg: 0, spellHeal: 0, spellShield: 0, casts: 0 },
+  };
+  return S;
+}
+
+function spawnUnit(B, side, defId, star, items, gr, gc, localRow, scale = 1) {
+  const d = unitDef(defId);
+  const S = B.sides[side];
+  const m = CFG.STAR_MULT[star] || 1;
+  const u = {
+    uid: B.uidN++, side, defId, d, star, items: items.slice(), r: gr, c: gc, fr: gr, fc: gc,
+    maxHp: d.hp * m * scale, atk: d.atk * m * scale, as: d.as, asBonus: 0, range: d.range,
+    armor: d.armor, mr: d.mr, ap: 0, crit: d.crit, critDmg: 1.5, manaMax: d.mana, mana: d.startMana,
+    dmgAmp: 0, lifesteal: 0, regen: 0, fx: new Set(), traits: d.traits || [],
+    alive: true, ghost: 0, ghostT: 0, ghostMult: 0, reviving: 0, revive: false,
+    stun: 0, freeze: 0, undying: 0, taunt: 0, sunder: null, burn: null,
+    slows: [], buffs: [], shields: [],
+    target: null, atkCd: 0.25 + B.rng.next() * 0.35, moveCd: 0, moveDur: CFG.MOVE_TIME, retargetT: 0,
+    atkCount: 0, asStacks: 0, fireBurn: 0, frostSlow: 0, distAmp: 0, leap: false, leapStun: false,
+    dmgDone: 0, dmgTaken: 0, healDone: 0, summon: !!d.summon, monster: defId.startsWith('m_'),
+  };
+  // 아이템
+  for (const it of u.items) {
+    const info = itemInfo(it);
+    const st = info.stats;
+    u.atk += st.atk || 0; u.asBonus += st.as || 0; u.armor += st.armor || 0; u.mr += st.mr || 0;
+    u.ap += st.ap || 0; u.mana += st.mana || 0; u.maxHp += st.hp || 0; u.crit += st.crit || 0;
+    if (info.fx) u.fx.add(info.fx);
+  }
+  if (u.fx.has('critDmg')) u.critDmg += 0.4;
+  if (u.fx.has('bigAp')) u.ap += 40;
+  if (u.fx.has('lifesteal')) u.lifesteal += 0.25;
+  if (u.fx.has('dmgAmp')) u.dmgAmp += 0.15;
+  if (u.fx.has('regen')) u.regen += 0.03;
+  if (u.fx.has('revive')) u.revive = true;
+  applyTraitBonuses(S, u);
+  // 증강
+  const A = S.aug;
+  if (A.has('frontline') && localRow === 0) u.maxHp *= 1.2;
+  if (A.has('backline') && localRow >= 2) u.atk *= 1.15;
+  if (A.has('critAll')) u.crit += 0.15;
+  if (A.has('armorAll')) { u.armor += 20; u.mr += 20; }
+  if (A.has('apAll')) u.ap += 20;
+  if (A.has('regenAll')) u.regen += 0.015;
+  if (A.has('manaStart')) u.mana += 20;
+  if (A.has('swift')) u.asBonus += 0.15;
+  if (A.has('giant')) u.maxHp *= 1.12;
+  if (A.has('lifesteal')) u.lifesteal += 0.10;
+  u.hp = u.maxHp;
+  u.crit = Math.min(u.crit, 1);
+  B.units.push(u);
+  B.occ[gr][gc] = u.uid;
+  return u;
+}
+
+function applyTraitBonuses(S, u) {
+  const T = S.tiers;
+  const has = t => u.traits.includes(t);
+  const origin = t => T[t] === 3 || (T[t] > 0 && has(t)); // 6단계는 모든 아군
+  if (origin('fire')) u.fireBurn = [0, 15, 35, 70][T.fire];
+  if (origin('frost')) u.frostSlow = [0, 0.15, 0.25, 0.40][T.frost];
+  if (origin('forest')) u.regen += [0, 0.02, 0.035, 0.06][T.forest];
+  if (origin('wraith')) { u.ghostT = [0, 2, 3, 5][T.wraith]; u.ghostMult = [0, 0.5, 0.7, 1][T.wraith]; }
+  if (origin('mech')) u.mechShield = [0, 180, 380, 750][T.mech];
+  if (origin('star')) u.manaMax = Math.round(u.manaMax * (1 - [0, 0.15, 0.25, 0.35][T.star]));
+  if (T.guardian) {
+    const b = has('guardian') ? [0, 20, 40, 70][T.guardian] : [0, 0, 10, 25][T.guardian];
+    u.armor += b; u.mr += b;
+  }
+  if (T.vanguard && has('vanguard')) {
+    u.leap = true; u.atk *= 1 + [0, 0.15, 0.30, 0.55][T.vanguard]; u.leapStun = T.vanguard === 3;
+  }
+  if (T.sniper && has('sniper')) { u.range += T.sniper === 3 ? 2 : 1; u.distAmp = [0, 0.05, 0.08, 0.12][T.sniper]; }
+  if (T.mystic && has('mystic')) u.ap += [0, 20, 45, 80][T.mystic];
+  if (T.assassin && has('assassin')) { u.crit += [0, 0.15, 0.30, 0.45][T.assassin]; u.critDmg += [0, 0.25, 0.45, 0.7][T.assassin]; }
+}
+
+function startEffects(B) {
+  for (const u of B.units) {
+    if (u.mechShield) addShield(B, u, u.mechShield, 999, null);
+    if (u.fx.has('locket')) for (const a of alliesOf(B, u.side)) if (cheb(a.r, a.c, u.r, u.c) <= 1) addShield(B, a, 200, 8, null);
+  }
+  for (const u of B.units) if (u.leap) {
+    const far = farthestFrom(B, u, enemiesOf(B, u.side));
+    if (far) {
+      leapNear(B, u, far);
+      if (u.leapStun) for (const e of enemiesOf(B, u.side)) if (cheb(e.r, e.c, u.r, u.c) <= 1) applyStun(B, e, 1);
+    }
+  }
+}
+
+/* ---------- 조회 도구 ---------- */
+const targetable = u => u.alive && u.reviving <= 0;
+function alliesOf(B, side) { return B.units.filter(u => u.side === side && targetable(u)); }
+function enemiesOf(B, side) { return B.units.filter(u => u.side !== side && targetable(u)); }
+function unitByUid(B, uid) { return B.units.find(u => u.uid === uid); }
+function farthestFrom(B, u, list) {
+  let best = null, bd = -1;
+  for (const e of list) { const d = cheb(u.r, u.c, e.r, e.c) * 10 + Math.abs(u.c - e.c); if (d > bd) { bd = d; best = e; } }
+  return best;
+}
+function nearestTo(r, c, list) {
+  let best = null, bd = 1e9;
+  for (const e of list) {
+    const d = cheb(r, c, e.r, e.c) + ((e.r - r) ** 2 + (e.c - c) ** 2) * 0.001 + e.uid * 1e-6;
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+function freeCellsNear(B, r, c, maxR = 3) {
+  const out = [];
+  for (let rad = 1; rad <= maxR; rad++) {
+    for (let rr = r - rad; rr <= r + rad; rr++) for (let cc = c - rad; cc <= c + rad; cc++) {
+      if (rr < 0 || cc < 0 || rr >= GROWS || cc >= GCOLS) continue;
+      if (cheb(r, c, rr, cc) !== rad || B.occ[rr][cc]) continue;
+      out.push([rr, cc]);
+    }
+    if (out.length) return out;
+  }
+  return out;
+}
+function placeUnit(B, u, r, c, instant) {
+  B.occ[u.r][u.c] = 0;
+  u.fr = instant ? r : u.r; u.fc = instant ? c : u.c;
+  u.r = r; u.c = c;
+  B.occ[r][c] = u.uid;
+}
+function leapNear(B, u, tgt) {
+  const cells = freeCellsNear(B, tgt.r, tgt.c, 3);
+  if (!cells.length) return false;
+  cells.sort((a, b) => cheb(a[0], a[1], tgt.r, tgt.c) - cheb(b[0], b[1], tgt.r, tgt.c) || Math.abs(a[1] - u.c) - Math.abs(b[1] - u.c));
+  const [r, c] = cells[0];
+  const from = [u.r, u.c];
+  placeUnit(B, u, r, c, true);
+  u.target = tgt;
+  emit(B, { t: 'leap', uid: u.uid, from, to: [r, c] });
+  return true;
+}
+function emit(B, e) { if (!B.headless) B.ev.push(e); }
+
+/* ---------- 능력치 ---------- */
+function buffSum(u, stat) { let s = 0; for (const b of u.buffs) if (b.stat === stat) s += b.v; return s; }
+function maxSlow(u, move) { let s = 0; for (const x of u.slows) if (!move || x.move) s = Math.max(s, x.v); return s; }
+function effAtk(u) {
+  let m = 1 + buffSum(u, 'atk');
+  if (u.fx.has('rage') && u.hp < u.maxHp * 0.5) m += 0.35;
+  return u.atk * m;
+}
+function effAS(u) {
+  const a = u.as * (1 + u.asBonus + buffSum(u, 'as') + u.asStacks * 0.06) * (1 - maxSlow(u, false));
+  return clamp(a, 0.2, 5);
+}
+function effArmor(u) { return (u.armor + buffSum(u, 'armor')) * (u.sunder ? 0.5 : 1); }
+function effMr(u) { return u.mr + buffSum(u, 'mr'); }
+
+/* ---------- 효과 기본 단위 ---------- */
+// src: 공격·시전한 유닛(없으면 null), o: {attack, skill, spellSide, crit, reflect, trueDmg}
+function dealDamage(B, src, tgt, raw, kind, o = {}) {
+  if (!targetable(tgt) || raw <= 0) return 0;
+  if (o.attack && tgt.fx.has('dodge') && B.rng.chance(0.2)) { emit(B, { t: 'miss', uid: tgt.uid }); return 0; }
+  let d = raw;
+  if (src) d *= 1 + src.dmgAmp;
+  if (kind !== 'true') d *= B.amp;
+  if (kind === 'phys') d *= 100 / (100 + Math.max(0, effArmor(tgt)));
+  else if (kind === 'magic') d *= 100 / (100 + Math.max(0, effMr(tgt)));
+  if (tgt.sunder) d *= 1 + tgt.sunder.amp;
+  let left = d;
+  for (const s of tgt.shields) { const a = Math.min(s.amt, left); s.amt -= a; left -= a; if (left <= 0) break; }
+  tgt.shields = tgt.shields.filter(s => s.amt > 0.5);
+  tgt.hp -= left;
+  tgt.dmgTaken += d;
+  if (src) src.dmgDone += d;
+  if (o.spellSide != null) B.sides[o.spellSide].stats.spellDmg += d;
+  if (o.attack) tgt.mana = Math.min(tgt.manaMax, tgt.mana + 5);
+  else if (o.skill) tgt.mana = Math.min(tgt.manaMax, tgt.mana + 2);
+  emit(B, { t: 'dmg', uid: tgt.uid, a: d, crit: !!o.crit, kind, spell: o.spellSide != null });
+  if (src && targetable(src)) {
+    if (o.attack && src.lifesteal) healUnit(B, src, src, d * src.lifesteal, true);
+    if (o.skill && src.fx.has('spellVamp')) healUnit(B, src, src, d * 0.2, true);
+    if (o.attack && tgt.fireBurn) applyBurn(B, src, tgt.fireBurn, 3);
+    if (o.attack && tgt.fx.has('thorns') && !o.reflect) dealDamage(B, tgt, src, 25, 'magic', { reflect: true });
+  }
+  if (tgt.hp <= 0) onLethal(B, tgt);
+  return d;
+}
+
+function onLethal(B, u) {
+  if (u.undying > 0) { u.hp = 1; return; }
+  if (u.revive) {
+    u.revive = false; u.alive = false; u.reviving = 1; u.hp = 0;
+    u.shields = []; u.burn = null;
+    emit(B, { t: 'reviveStart', uid: u.uid });
+    return;
+  }
+  u.alive = false; u.hp = 0; u.shields = []; u.burn = null;
+  B.occ[u.r][u.c] = 0;
+  emit(B, { t: 'death', uid: u.uid });
+  const S = B.sides[u.side];
+  if (!u.summon) S.lm = Math.min(CFG.LORD_MANA_MAX, S.lm + (S.aug.has('sacrifice') ? 2 : 1));
+  if (u.ghostT > 0 && !u.summon) { u.ghost = u.ghostT; emit(B, { t: 'ghost', uid: u.uid }); }
+}
+
+function healUnit(B, src, tgt, amt, raw) {
+  if (!targetable(tgt) || amt <= 0) return 0;
+  const S = B.sides[tgt.side];
+  const a = Math.min(tgt.maxHp - tgt.hp, raw ? amt : amt * S.healAmp);
+  if (a <= 0) return 0;
+  tgt.hp += a;
+  if (src) src.healDone += a;
+  if (a >= 25) emit(B, { t: 'heal', uid: tgt.uid, a });
+  return a;
+}
+function addShield(B, tgt, amt, dur, src) {
+  if (!targetable(tgt)) return 0;
+  const a = src === null ? amt : amt * B.sides[tgt.side].healAmp;
+  tgt.shields.push({ amt: a, t: dur });
+  emit(B, { t: 'shield', uid: tgt.uid, a });
+  return a;
+}
+function applyStun(B, tgt, dur) {
+  if (!targetable(tgt) || tgt.fx.has('ccImmune')) return;
+  tgt.stun = Math.max(tgt.stun, dur);
+  emit(B, { t: 'stun', uid: tgt.uid, dur });
+}
+function applySlow(B, tgt, v, dur, move) {
+  if (!targetable(tgt)) return;
+  tgt.slows.push({ v, t: dur, move: !!move });
+}
+function applyBurn(B, tgt, dps, dur, spellSide) {
+  if (!targetable(tgt)) return;
+  if (!tgt.burn || tgt.burn.dps <= dps) tgt.burn = { dps, t: dur, spellSide };
+  else tgt.burn.t = Math.max(tgt.burn.t, dur);
+}
+function addBuff(tgt, stat, v, dur) { if (targetable(tgt)) tgt.buffs.push({ stat, v, t: dur }); }
+
+/* ===== 04-combat2.js ===== */
+/* =====================================================================
+ * 04. 전투 엔진 (2/2) — 틱 진행, A* 경로, 공격·스킬, 종료 판정
+ * ===================================================================== */
+
+function stepBattle(B) {
+  if (B.over) return;
+  const dt = CFG.TICK;
+  B.tick++;
+  const dot = B.tick % 5 === 0; // 지속 피해·회복은 0.5초마다
+  // 연장전: 15초 이후 모든 피해가 초당 8%씩 증가해 시간 초과를 드물게 만든다
+  const time = B.tick * dt;
+  if (time > CFG.OVERTIME) {
+    if (B.amp === 1) emit(B, { t: 'overtime' });
+    B.amp = 1 + (time - CFG.OVERTIME) * CFG.OVERTIME_RAMP;
+  }
+
+  // 1) 군주 마나, 주문 재사용 대기, 입력된 주문 이벤트, 자동/AI 시전
+  for (const S of B.sides) {
+    S.lm = Math.min(CFG.LORD_MANA_MAX, S.lm + CFG.LORD_MANA_REGEN * S.lmRegen * dt);
+    for (const sl of S.spells) if (sl.cd > 0) sl.cd = Math.max(0, sl.cd - dt);
+  }
+  const q = B.queue; B.queue = [];
+  for (const e of q) castSpell(B, e.side, e.slot, e.target, false);
+  for (const S of B.sides) autoCastTick(B, S, dt);
+
+  // 2) 화염 지대
+  for (const z of B.zones) {
+    z.t -= dt;
+    if (dot) for (const e of enemiesOf(B, z.side)) if (e.r === z.row) dealDamage(B, null, e, z.dps * 0.5, 'magic', { spellSide: z.side });
+  }
+  B.zones = B.zones.filter(z => z.t > 0);
+
+  // 3) 유닛 (매 틱 순서를 섞어 진영 편향 제거)
+  const order = B.rng.shuffle(B.units.filter(u => u.alive || u.ghost > 0 || u.reviving > 0));
+  for (const u of order) updateUnit(B, u, dt, dot);
+
+  // 4) 종료 판정
+  const live = [0, 0];
+  for (const u of B.units) if ((u.alive || u.reviving > 0) && !u.summon) live[u.side]++;
+  const liveAny = [0, 0];
+  for (const u of B.units) if (u.alive || u.reviving > 0) liveAny[u.side]++;
+  if (!liveAny[0] || !liveAny[1] || !live[0] || !live[1]) {
+    const w = (live[0] && !live[1]) ? 0 : (live[1] && !live[0]) ? 1 : -1;
+    finishBattle(B, w, false);
+  } else if (B.tick >= B.maxTick) finishBattle(B, -1, true);
+}
+
+function finishBattle(B, winner, timeout) {
+  B.over = true;
+  const survivors = [[], []];
+  for (const u of B.units) if ((u.alive || u.reviving > 0) && !u.summon) survivors[u.side].push({ star: u.star, cost: u.d.cost });
+  B.result = { winner, timeout, survivors, ticks: B.tick };
+  emit(B, { t: 'end', winner, timeout });
+}
+
+function runBattle(specA, specB, seed) {
+  const B = createBattle(specA, specB, seed, { headless: true });
+  let guard = 0;
+  while (!B.over && guard++ < 1000) stepBattle(B);
+  return B;
+}
+
+function updateUnit(B, u, dt, dot) {
+  if (u.reviving > 0) {
+    u.reviving -= dt;
+    if (u.reviving <= 0) { u.alive = true; u.hp = Math.min(u.maxHp, 400); emit(B, { t: 'revive', uid: u.uid }); }
+    return;
+  }
+  if (u.ghost > 0) {
+    u.ghost -= dt;
+    if (u.ghost <= 0) { emit(B, { t: 'ghostEnd', uid: u.uid }); return; }
+    ghostAct(B, u, dt);
+    return;
+  }
+  // 상태 타이머
+  u.stun = Math.max(0, u.stun - dt); u.freeze = Math.max(0, u.freeze - dt);
+  u.undying = Math.max(0, u.undying - dt); u.taunt = Math.max(0, u.taunt - dt);
+  if (u.sunder && (u.sunder.t -= dt) <= 0) u.sunder = null;
+  for (const b of u.buffs) b.t -= dt; u.buffs = u.buffs.filter(b => b.t > 0);
+  for (const s of u.slows) s.t -= dt; u.slows = u.slows.filter(s => s.t > 0);
+  for (const s of u.shields) s.t -= dt; u.shields = u.shields.filter(s => s.t > 0);
+  if (dot) {
+    if (u.burn) {
+      dealDamage(B, null, u, u.burn.dps * 0.5, 'magic', { spellSide: u.burn.spellSide });
+      if (u.burn && (u.burn.t -= 0.5) <= 0) u.burn = null;
+    }
+    if (u.regen && u.alive) healUnit(B, null, u, u.maxHp * u.regen * 0.5, true);
+    if (u.fx.has('frostAura')) for (const e of enemiesOf(B, u.side)) if (cheb(e.r, e.c, u.r, u.c) <= 2) applySlow(B, e, 0.25, 0.6);
+  }
+  if (!u.alive) return;
+  if (u.stun > 0 || u.freeze > 0) return;
+  if (u.moveCd > 0) { u.moveCd -= dt; return; }
+
+  // 대상 선정 (도발 우선)
+  const foes = enemiesOf(B, u.side);
+  if (!foes.length) return;
+  const taunter = foes.find(e => e.taunt > 0 && cheb(e.r, e.c, u.r, u.c) <= 2);
+  if (taunter) u.target = taunter;
+  u.retargetT -= dt;
+  if (!u.target || !targetable(u.target) || (u.retargetT <= 0 && cheb(u.r, u.c, u.target.r, u.target.c) > u.range)) {
+    u.target = nearestTo(u.r, u.c, foes);
+    u.retargetT = 1;
+  }
+  const t = u.target;
+  if (!t) return;
+
+  // 스킬
+  if (u.d.skill && u.mana >= u.manaMax) { castSkill(B, u); return; }
+
+  const dist = cheb(u.r, u.c, t.r, t.c);
+  if (dist <= u.range) {
+    u.atkCd -= dt;
+    if (u.atkCd <= 0) { attack(B, u, t, dist); u.atkCd += 1 / effAS(u); }
+  } else {
+    const step = findStep(B, u, t);
+    if (step) {
+      placeUnit(B, u, step[0], step[1], false);
+      u.moveDur = CFG.MOVE_TIME / Math.max(0.2, 1 - maxSlow(u, true));
+      u.moveCd = u.moveDur;
+      u.atkCd = Math.max(u.atkCd, 0.15);
+    } else {
+      // 길이 막혔으면 다른 적을 노린다
+      const alt = foes.filter(e => e !== t).sort((a, b) => cheb(u.r, u.c, a.r, a.c) - cheb(u.r, u.c, b.r, b.c))[0];
+      if (alt && B.rng.chance(0.3)) u.target = alt;
+    }
+  }
+}
+
+// A* 탐색: 목표 = 대상과의 거리가 사거리 이내인 빈 칸. 휴리스틱 = max(0, 체비셰프 거리 - 사거리)
+function findStep(B, u, t) {
+  const N = GROWS * GCOLS;
+  const g = new Float32Array(N).fill(1e9);
+  const from = new Int16Array(N).fill(-1);
+  const closed = new Uint8Array(N);
+  const start = u.r * GCOLS + u.c;
+  const h = (r, c) => Math.max(0, cheb(r, c, t.r, t.c) - u.range);
+  g[start] = 0;
+  const open = [start];
+  let goal = -1;
+  while (open.length) {
+    let bi = 0, bf = 1e9;
+    for (let i = 0; i < open.length; i++) {
+      const n = open[i], f = g[n] + h((n / GCOLS) | 0, n % GCOLS);
+      if (f < bf) { bf = f; bi = i; }
+    }
+    const cur = open.splice(bi, 1)[0];
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+    const cr = (cur / GCOLS) | 0, cc = cur % GCOLS;
+    if (cur !== start && cheb(cr, cc, t.r, t.c) <= u.range) { goal = cur; break; }
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      const nr = cr + dr, nc = cc + dc;
+      if (nr < 0 || nc < 0 || nr >= GROWS || nc >= GCOLS) continue;
+      if (B.occ[nr][nc]) continue;
+      const n = nr * GCOLS + nc;
+      const cost = g[cur] + (dr && dc ? 1.02 : 1); // 대각선을 아주 약간 비싸게 해서 곧은 경로 선호
+      if (cost < g[n]) { g[n] = cost; from[n] = cur; open.push(n); }
+    }
+  }
+  if (goal < 0) return null;
+  let n = goal;
+  while (from[n] !== start && from[n] >= 0) n = from[n];
+  return [(n / GCOLS) | 0, n % GCOLS];
+}
+
+function attack(B, u, t, dist) {
+  u.atkCount++;
+  let dmg = effAtk(u);
+  if (u.distAmp) dmg *= 1 + u.distAmp * dist;
+  const crit = B.rng.chance(u.crit);
+  if (crit) dmg *= u.critDmg;
+  emit(B, { t: 'atk', uid: u.uid, tuid: t.uid, ranged: u.range > 1 });
+  dealDamage(B, u, t, dmg, 'phys', { attack: true, crit });
+  u.mana = Math.min(u.manaMax, u.mana + 10 + (u.fx.has('manaHit') ? 6 : 0));
+  if (u.fx.has('asRamp')) u.asStacks = Math.min(10, u.asStacks + 1);
+  if (u.frostSlow) applySlow(B, t, u.frostSlow, 2, false);
+  if (u.fx.has('burnHit')) applyBurn(B, t, 20, 3);
+  if (u.fx.has('zap') && u.atkCount % 3 === 0) {
+    const others = enemiesOf(B, u.side).filter(e => e !== t).sort((a, b) => cheb(a.r, a.c, t.r, t.c) - cheb(b.r, b.c, t.r, t.c)).slice(0, 2);
+    for (const e of [t, ...others]) { emit(B, { t: 'zap', uid: u.uid, tuid: e.uid }); dealDamage(B, u, e, 70, 'magic', { skill: true }); }
+  }
+}
+
+function ghostAct(B, u, dt) {
+  const foes = enemiesOf(B, u.side);
+  if (!foes.length) return;
+  if (!u.target || !targetable(u.target)) u.target = nearestTo(u.r, u.c, foes);
+  u.atkCd -= dt;
+  if (u.atkCd <= 0) {
+    u.atkCd += 1 / effAS(u);
+    emit(B, { t: 'atk', uid: u.uid, tuid: u.target.uid, ranged: true, ghost: true });
+    dealDamage(B, u, u.target, effAtk(u) * u.ghostMult, 'phys', { attack: true });
+  }
+}
+
+/* ---------- 유닛 스킬 ---------- */
+function castSkill(B, u) {
+  const sk = u.d.skill;
+  u.mana = u.fx.has('blueBuff') ? 25 : 0;
+  emit(B, { t: 'skill', uid: u.uid, name: sk.name });
+  const ctx = { side: u.side, caster: u, idx: u.star - 1, mult: 1 + u.ap / 100, last: [] };
+  for (const fx of sk.fx) runSkillFx(B, ctx, fx);
+}
+
+function selectTargets(B, ctx, fx) {
+  const u = ctx.caster, side = ctx.side;
+  const foes = enemiesOf(B, side), friends = alliesOf(B, side);
+  const ratio = x => x.hp / x.maxHp;
+  switch (fx.tgt) {
+    case 'self': return [u];
+    case 'target': return u.target && targetable(u.target) ? [u.target] : (foes.length ? [nearestTo(u.r, u.c, foes)] : []);
+    case 'area': { const c = u.target && targetable(u.target) ? u.target : nearestTo(u.r, u.c, foes); return c ? foes.filter(e => cheb(e.r, e.c, c.r, c.c) <= (fx.r || 1)) : []; }
+    case 'selfArea': return foes.filter(e => cheb(e.r, e.c, u.r, u.c) <= (fx.r || 1));
+    case 'lowestAlly': return friends.sort((a, b) => ratio(a) - ratio(b)).slice(0, 1);
+    case 'lowestAllies': return friends.sort((a, b) => ratio(a) - ratio(b)).slice(0, fx.n || 2);
+    case 'allAllies': return friends;
+    case 'allEnemies': return foes;
+    case 'lowestEnemy': return foes.sort((a, b) => a.hp - b.hp).slice(0, 1);
+    case 'randomEnemies': return B.rng.shuffle(foes).slice(0, fx.n || 3);
+    case 'farthestEnemy': { const f = farthestFrom(B, u, foes); return f ? [f] : []; }
+    case 'last': return ctx.last.filter(targetable);
+  }
+  return [];
+}
+
+function runSkillFx(B, ctx, fx) {
+  const u = ctx.caster;
+  const v = fx.v ? fx.v[ctx.idx] : 0;
+  if (fx.t === 'summon') {
+    const n = fx.n || 1;
+    for (let i = 0; i < n; i++) {
+      const cells = freeCellsNear(B, u.r, u.c, 3);
+      if (!cells.length) break;
+      const [r, c] = B.rng.pick(cells);
+      const s = spawnUnit(B, u.side, fx.unit, u.star, [], r, c, 1);
+      emit(B, { t: 'summon', uid: s.uid });
+    }
+    return;
+  }
+  if (fx.t === 'leap') {
+    const tg = selectTargets(B, ctx, fx)[0];
+    if (tg) leapNear(B, u, tg);
+    return;
+  }
+  const targets = selectTargets(B, ctx, fx);
+  if (fx.t === 'dmg' || fx.t === 'burn' || fx.t === 'stun' || fx.t === 'slow' || fx.t === 'execute') ctx.last = targets;
+  for (const tg of targets) {
+    switch (fx.t) {
+      case 'dmg': {
+        let d = v * ctx.mult;
+        let crit = false;
+        if (u.fx.has('skillCrit') && B.rng.chance(u.crit)) { d *= u.critDmg; crit = true; }
+        emit(B, { t: 'skillHit', uid: u.uid, tuid: tg.uid });
+        dealDamage(B, u, tg, d, fx.kind || 'magic', { skill: true, crit });
+        break;
+      }
+      case 'burn': applyBurn(B, tg, v * ctx.mult, fx.dur || 3); break;
+      case 'stun': applyStun(B, tg, v); break;
+      case 'slow': applySlow(B, tg, v, fx.dur || 2, false); break;
+      case 'heal': healUnit(B, u, tg, v * ctx.mult); break;
+      case 'shield': addShield(B, tg, v * ctx.mult, fx.dur || 4, u); break;
+      case 'buff': addBuff(tg, fx.stat, v, fx.dur || 4); break;
+      case 'execute':
+        if (tg.hp / tg.maxHp <= v && tg.undying <= 0) { emit(B, { t: 'execute', uid: tg.uid }); dealDamage(B, u, tg, tg.hp + sum(tg.shields.map(s => s.amt)) + 1, 'true', { skill: true }); }
+        break;
+    }
+  }
+}
+
+/* ===== 05-spells.js ===== */
+/* =====================================================================
+ * 05. 군주 주문 — 시전, 효과, 자동 시전 규칙, AI 시전
+ *     플레이어 입력·자동 시전·AI 시전 모두 castSpell 하나로 처리된다.
+ *     직접 입력은 B.queue 에 {side, slot, target} 이벤트로 들어가 다음 틱에 실행.
+ * ===================================================================== */
+
+function spellCostNow(S, slot) {
+  let c = spellCost(slot.id, slot.lvl);
+  if (S.lordType === 'tactic' && S.castCount === 0) c -= 2;
+  return Math.max(0, c);
+}
+function spellReady(S, i) {
+  const sl = S.spells[i];
+  if (!sl) return false;
+  return !sl.used && sl.cd <= 0 && S.lm >= spellCostNow(S, sl);
+}
+function queueSpell(B, side, slot, target) { B.queue.push({ side, slot, target, tick: B.tick }); }
+
+// target: {uid} | {uid, uid2} | {r} | {r, c} | {uid, r, c} | {}
+function validTarget(B, S, sp, tg) {
+  if (!tg) return false;
+  const ally = id => { const u = unitByUid(B, id); return u && u.side === S.idx && targetable(u) ? u : null; };
+  const foe = id => { const u = unitByUid(B, id); return u && u.side !== S.idx && targetable(u) ? u : null; };
+  switch (sp.target) {
+    case 'ally': return !!ally(tg.uid);
+    case 'enemy': return !!foe(tg.uid);
+    case 'none': return true;
+    case 'row': return tg.r >= 0 && tg.r < GROWS;
+    case 'cell': return tg.r >= 0 && tg.r < GROWS && tg.c >= 0 && tg.c < GCOLS;
+    case 'ally2': return !!ally(tg.uid) && !!ally(tg.uid2) && tg.uid !== tg.uid2;
+    case 'allyCell': return !!ally(tg.uid) && tg.r >= 0 && tg.r < GROWS && tg.c >= 0 && tg.c < GCOLS && !B.occ[tg.r][tg.c];
+  }
+  return false;
+}
+
+function castSpell(B, side, slotIdx, target, auto) {
+  const S = B.sides[side];
+  const sl = S.spells[slotIdx];
+  if (!sl || B.over) return false;
+  const sp = SPELLS[sl.id];
+  if (!spellReady(S, slotIdx) || !validTarget(B, S, sp, target)) return false;
+  S.lm -= spellCostNow(S, sl);
+  S.castCount++;
+  S.stats.casts++;
+  if (sp.once) sl.used = true;
+  else sl.cd = sp.cd * (S.aug.has('quickCast') ? 0.7 : 1);
+  const mult = S.spellMult * (auto ? (S.ai && S.ai.mult ? S.ai.mult : CFG.AUTO_CAST_MULT) : 1);
+  const v = sp.fx[0].v[sl.lvl - 1];
+  emit(B, { t: 'spell', side, id: sl.id, name: sp.name, icon: sp.icon, lord: S.name, emoji: S.emoji, target, auto: !!auto });
+  B.log.push({ tick: B.tick, side, slot: slotIdx, target, auto: !!auto });
+  const enemyOf = id => unitByUid(B, id);
+  const seal = u => (u && u.fx.has('seal') ? 1.3 : 1);
+  const shieldDur = d => d + (S.lordType === 'guard' ? 1 : 0);
+  const dmgMult = mult * S.spellDmgMult;
+  const sideAllies = () => alliesOf(B, side);
+  const area = (r, c) => enemiesOf(B, side).filter(e => cheb(e.r, e.c, r, c) <= 1);
+
+  for (const fx of sp.fx) {
+    const val = fx.v[sl.lvl - 1];
+    switch (fx.t) {
+      case 'dmg': { const e = enemyOf(target.uid); if (e) dealDamage(B, null, e, val * dmgMult, 'magic', { spellSide: side }); break; }
+      case 'stun': { const e = enemyOf(target.uid); if (e) applyStun(B, e, val); break; }
+      case 'shieldPct': {
+        const a = unitByUid(B, target.uid);
+        if (a) { const amt = a.maxHp * val * mult * seal(a); a.shields.push({ amt, t: shieldDur(fx.dur) }); S.stats.spellShield += amt; emit(B, { t: 'shield', uid: a.uid, a: amt }); }
+        break;
+      }
+      case 'buffAll': for (const a of sideAllies()) addBuff(a, fx.stat, val * mult * seal(a), fx.dur); break;
+      case 'buffPct': { const a = unitByUid(B, target.uid); if (a) addBuff(a, fx.stat, val * mult * seal(a), fx.dur); break; }
+      case 'swap': {
+        const a = unitByUid(B, target.uid), b = unitByUid(B, target.uid2);
+        if (a && b) {
+          const [ar, ac, br, bc] = [a.r, a.c, b.r, b.c];
+          B.occ[ar][ac] = 0; B.occ[br][bc] = 0;
+          a.r = br; a.c = bc; b.r = ar; b.c = ac; a.fr = a.r; a.fc = a.c; b.fr = b.r; b.fc = b.c;
+          B.occ[a.r][a.c] = a.uid; B.occ[b.r][b.c] = b.uid;
+          a.moveCd = 0; b.moveCd = 0; a.target = null; b.target = null;
+          emit(B, { t: 'swap', a: a.uid, b: b.uid });
+          if (val) { for (const x of [a, b]) { const amt = val * mult * seal(x); x.shields.push({ amt, t: shieldDur(3) }); S.stats.spellShield += amt; } }
+        }
+        break;
+      }
+      case 'fillMana': { const a = unitByUid(B, target.uid); if (a && a.d.skill) a.mana = a.manaMax; break; }
+      case 'zone': B.zones.push({ side, row: target.r, dps: val * dmgMult, t: fx.dur }); break;
+      case 'freezeAll': for (const e of enemiesOf(B, side)) { e.freeze = Math.max(e.freeze, val * mult); emit(B, { t: 'freeze', uid: e.uid }); } break;
+      case 'undying': { const a = unitByUid(B, target.uid); if (a) { a.undying = val * mult * seal(a); emit(B, { t: 'undying', uid: a.uid }); } break; }
+      case 'healAllPct': for (const a of sideAllies()) S.stats.spellHeal += healUnit(B, null, a, a.maxHp * val * mult * seal(a), true); break;
+      case 'slowArea': for (const e of area(target.r, target.c)) { applySlow(B, e, Math.min(0.8, val * mult), fx.dur, true); applySlow(B, e, Math.min(0.8, val * mult), fx.dur, false); } break;
+      case 'dmgArea': for (const e of area(target.r, target.c)) dealDamage(B, null, e, val * dmgMult, 'magic', { spellSide: side }); break;
+      case 'teleport': {
+        const a = unitByUid(B, target.uid);
+        if (a && !B.occ[target.r][target.c]) {
+          placeUnit(B, a, target.r, target.c, true); a.moveCd = 0; a.target = null;
+          emit(B, { t: 'blink', uid: a.uid });
+          if (val) { const amt = val * mult * seal(a); a.shields.push({ amt, t: shieldDur(3) }); S.stats.spellShield += amt; }
+        }
+        break;
+      }
+      case 'taunt': {
+        const a = unitByUid(B, target.uid);
+        if (a) { a.taunt = fx.dur; addBuff(a, 'armor', val * mult * seal(a), fx.dur); addBuff(a, 'mr', val * mult * seal(a), fx.dur); emit(B, { t: 'taunt', uid: a.uid }); }
+        break;
+      }
+      case 'sunder': { const e = enemyOf(target.uid); if (e) { e.sunder = { amp: val * mult, t: fx.dur }; emit(B, { t: 'sunder', uid: e.uid }); } break; }
+      case 'reap': {
+        const e = enemyOf(target.uid);
+        if (!e) break;
+        if (e.hp / e.maxHp <= val * mult && e.undying <= 0) { emit(B, { t: 'execute', uid: e.uid }); dealDamage(B, null, e, e.hp + sum(e.shields.map(s => s.amt)) + 1, 'true', { spellSide: side }); }
+        else dealDamage(B, null, e, 200 * dmgMult, 'magic', { spellSide: side });
+        break;
+      }
+    }
+  }
+  return true;
+}
+
+/* ---------- 자동 시전 규칙 ---------- */
+function unitValue(u) { return u.d.cost * 3 + u.star * 4 + u.items.length * 3 + (u.monster ? 0 : 1); }
+function bestBy(list, f) { let b = null, bv = -1e9; for (const x of list) { const v = f(x); if (v > bv) { bv = v; b = x; } } return b; }
+function bestClump(B, side, min) {
+  const foes = enemiesOf(B, side);
+  let best = null, bn = 0;
+  for (let r = 0; r < GROWS; r++) for (let c = 0; c < GCOLS; c++) {
+    const n = foes.filter(e => cheb(e.r, e.c, r, c) <= 1).length;
+    if (n > bn) { bn = n; best = { r, c }; }
+  }
+  return bn >= min ? best : null;
+}
+function safestCell(B, side) {
+  const foes = enemiesOf(B, side);
+  let best = null, bd = -1;
+  for (let r = 0; r < GROWS; r++) for (let c = 0; c < GCOLS; c++) {
+    if (B.occ[r][c]) continue;
+    const d = foes.length ? Math.min(...foes.map(e => cheb(e.r, e.c, r, c))) : 0;
+    if (d > bd) { bd = d; best = { r, c }; }
+  }
+  return best;
+}
+
+// 조건을 만족하면 대상을 돌려주고, 아니면 null
+function ruleTarget(B, S, sl, rule, loose) {
+  const sp = SPELLS[sl.id];
+  const side = S.idx;
+  const friends = alliesOf(B, side), foes = enemiesOf(B, side);
+  if (!friends.length || !foes.length) return null;
+  const ratio = u => u.hp / u.maxHp;
+  const time = B.tick * CFG.TICK;
+  const k = loose ? 1.4 : 1; // 느슨한 기준(즉시형 AI)
+  const pick = u => (u ? { uid: u.uid } : null);
+  switch (rule) {
+    case 'off': return null;
+    case 'asap': return defaultTarget(B, S, sp);
+    case 'allyLow40': return pick(bestBy(friends.filter(u => ratio(u) <= 0.4 * k), u => u.items.length * 10 + unitValue(u)));
+    case 'enemyMana80': return pick(bestBy(foes.filter(u => u.d.skill && u.mana / u.manaMax >= 0.8 / k), unitValue));
+    case 'enemyCarry': return time >= 2 ? pick(bestBy(foes, unitValue)) : null;
+    case 'enemyLowest': return pick(bestBy(foes, u => -u.hp));
+    case 'midFight': return time >= 3 / k ? {} : null;
+    case 'losing': return friends.length < foes.length ? {} : null;
+    case 'swapTank': {
+      const front = friends.filter(u => ratio(u) <= 0.35 * k && foes.some(e => cheb(e.r, e.c, u.r, u.c) <= 1));
+      const a = bestBy(front, unitValue);
+      if (!a) return null;
+      const b = bestBy(friends.filter(u => u !== a && ratio(u) >= 0.7 && !foes.some(e => cheb(e.r, e.c, u.r, u.c) <= 1)), u => u.hp);
+      return b ? { uid: a.uid, uid2: b.uid } : null;
+    }
+    case 'carryMana': return pick(bestBy(friends.filter(u => u.d.skill && u.mana / u.manaMax < 0.5 && !u.summon), unitValue));
+    case 'rowMost': {
+      let br = -1, bn = 0;
+      for (let r = 0; r < GROWS; r++) { const n = foes.filter(e => e.r === r).length; if (n > bn) { bn = n; br = r; } }
+      return bn >= (loose ? 2 : 3) ? { r: br } : null;
+    }
+    case 'enemySkills': return foes.filter(u => u.d.skill && u.mana / u.manaMax >= 0.7).length >= (loose ? 1 : 2) ? {} : null;
+    case 'allyDying': return pick(bestBy(friends.filter(u => ratio(u) <= 0.25 * k && !u.summon), unitValue));
+    case 'teamLow': return sum(friends.map(ratio)) / friends.length <= 0.6 * Math.min(k, 1.25) ? {} : null;
+    case 'enemyClump': return bestClump(B, side, loose ? 2 : 3);
+    case 'carryFight': return pick(bestBy(friends.filter(u => u.target && targetable(u.target) && cheb(u.r, u.c, u.target.r, u.target.c) <= u.range && !u.summon), unitValue));
+    case 'rescueLow': {
+      const a = bestBy(friends.filter(u => ratio(u) <= 0.35 * k && foes.some(e => cheb(e.r, e.c, u.r, u.c) <= 1)), unitValue);
+      const cell = a && safestCell(B, side);
+      return a && cell ? { uid: a.uid, r: cell.r, c: cell.c } : null;
+    }
+    case 'tankFront': {
+      const pressed = friends.some(u => u.range >= 2 && foes.some(e => e.target === u && cheb(e.r, e.c, u.r, u.c) <= 1));
+      return pressed ? pick(bestBy(friends.filter(u => u.range === 1 || u.traits.includes('guardian')), u => u.hp)) : null;
+    }
+    case 'enemyFront': return time >= 1.5 ? pick(bestBy(foes, u => u.maxHp)) : null;
+    case 'enemyExecute': {
+      const th = sp.fx[0].v[sl.lvl - 1];
+      return pick(bestBy(foes.filter(u => u.hp / u.maxHp <= th && u.undying <= 0), unitValue));
+    }
+  }
+  return null;
+}
+
+// '즉시' 규칙용 기본 대상
+function defaultTarget(B, S, sp) {
+  const side = S.idx;
+  const friends = alliesOf(B, side), foes = enemiesOf(B, side);
+  switch (sp.target) {
+    case 'ally': return { uid: bestBy(friends, u => unitValue(u) - u.hp / u.maxHp * 5).uid };
+    case 'enemy': return { uid: bestBy(foes, unitValue).uid };
+    case 'none': return {};
+    case 'row': { let br = 0, bn = -1; for (let r = 0; r < GROWS; r++) { const n = foes.filter(e => e.r === r).length; if (n > bn) { bn = n; br = r; } } return { r: br }; }
+    case 'cell': return bestClump(B, side, 1);
+    case 'ally2': return null;
+    case 'allyCell': return null;
+  }
+  return null;
+}
+
+function autoCastTick(B, S, dt) {
+  if (!S.spells.length) return;
+  if (S.ai) return aiCastTick(B, S, dt);
+  // 플레이어: 자동 시전이 켜진 주문(또는 즉시 결과 모드)만
+  for (let i = 0; i < S.spells.length; i++) {
+    const sl = S.spells[i];
+    const rule = S.forceAuto && sl.rule === 'off' ? SPELLS[sl.id].auto[0] : sl.rule;
+    if (rule === 'off' || !spellReady(S, i)) continue;
+    const tg = ruleTarget(B, S, sl, rule, false);
+    if (tg && castSpell(B, S.idx, i, tg, true)) return;
+  }
+}
+
+// AI 군주 시전: 주문 성향이 높으면 비싼 주문을 위해 마나를 아끼고, 낮으면 싼 주문을 바로 쓴다.
+function aiCastTick(B, S, dt) {
+  const tend = S.ai.tend;
+  if (S.aiWait > 0) { S.aiWait -= dt; return; }
+  const idxs = S.spells.map((_, i) => i).sort((a, b) =>
+    tend >= 0.5 ? spellCostNow(S, S.spells[b]) - spellCostNow(S, S.spells[a]) : spellCostNow(S, S.spells[a]) - spellCostNow(S, S.spells[b]));
+  const top = S.spells[idxs[0]];
+  for (const i of idxs) {
+    const sl = S.spells[i];
+    if (!spellReady(S, i)) continue;
+    // 절약형: 가장 비싼 주문이 아직 안 됐으면, 마나가 남을 때만 싼 주문 사용
+    if (tend >= 0.45 && sl !== top && !top.used && top.cd <= 0 && S.lm - spellCostNow(S, sl) < spellCostNow(S, top)) continue;
+    const loose = tend < 0.4;
+    let tg = ruleTarget(B, S, sl, SPELLS[sl.id].auto[0], loose);
+    if (!tg && SPELLS[sl.id].auto[1]) tg = ruleTarget(B, S, sl, SPELLS[sl.id].auto[1], loose);
+    // 마나가 가득 차면 낭비하지 않도록 기본 대상에게라도 시전
+    if (!tg && (S.lm >= CFG.LORD_MANA_MAX - 0.5 || (loose && B.tick * CFG.TICK > 4))) tg = ruleTarget(B, S, sl, 'asap', true);
+    if (!tg) continue;
+    if (S.ai.castDelay > 0 && !S.aiArmed) { S.aiArmed = true; S.aiWait = B.rng.next() * S.ai.castDelay; return; }
+    S.aiArmed = false;
+    if (castSpell(B, S.idx, i, tg, true)) return;
+  }
+}
+
+/* ===== 06-game.js ===== */
+/* =====================================================================
+ * 06. 게임 상태 — 공유 유닛 풀, 상점, 경제, 합성, 아이템, 주문, 라운드
+ *     모든 상태는 G 하나에 모여 있고 JSON으로 그대로 저장된다.
+ * ===================================================================== */
+
+let G = null;
+const SAVE_KEY = 'sevenLordsTable.save.v1';
+
+function newGame(opts) {
+  const seed = opts.seed >>> 0 || ((Math.random() * 2 ** 31) | 0);
+  const rng = new RNG(seed);
+  G = {
+    seed, rngS: 0, difficulty: opts.difficulty || 'normal',
+    stage: 1, round: 1, phase: 'prep', uidN: 1, pool: {}, players: [],
+    roundsPlayed: 0, log: [], lastOpp: {}, pendingSpellPick: false,
+    battleSpeed: 1, instant: false, over: false,
+  };
+  for (const id in UNITS) G.pool[id] = POOL_SIZE[UNITS[id].cost];
+  // 플레이어
+  G.players.push(makePlayer(0, '나', '🧑‍✈️', opts.lordType, true));
+  // AI 군주 12명 중 7명 무작위, 성향 수치에 소폭 변동
+  const roster = rng.shuffle(LORD_ROSTER.slice()).slice(0, 7);
+  roster.forEach((L, i) => {
+    const P = makePlayer(i + 1, L.name, L.emoji, L.type, false);
+    const p = {};
+    for (const k in L.p) p[k] = clamp(L.p[k] + rng.range(-0.12, 0.12), 0, 1);
+    P.ai = { p, fav: L.fav.slice(), focus: L.fav.slice(), style: L.style, rerollLevel: rng.pick([4, 5, 6]) };
+    G.players.push(P);
+  });
+  G.rngS = rng.s;
+  // 시작 유닛 1개씩
+  for (const P of G.players) {
+    const ids = Object.keys(UNITS).filter(id => UNITS[id].cost === 1);
+    const id = R().pick(ids);
+    takeFromPool(id, 1);
+    P.bench[0] = makeUnit(id, 1);
+  }
+  return G;
+}
+
+// 게임 난수: 상태를 G에 보관해 저장·재현 가능
+function R() {
+  const r = new RNG(G.rngS || G.seed);
+  return {
+    next() { const v = r.next(); G.rngS = r.s; return v; },
+    int(n) { return Math.floor(this.next() * n); },
+    range(a, b) { return a + this.next() * (b - a); },
+    chance(p) { return this.next() < p; },
+    pick(a) { return a[this.int(a.length)]; },
+    shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = this.int(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; },
+    weighted(w) { let s = sum(w), x = this.next() * s; for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; } return w.length - 1; },
+  };
+}
+
+function makePlayer(id, name, emoji, lordType, isHuman) {
+  return {
+    id, name, emoji, lordType, isHuman, hp: CFG.START_HP, gold: 0, level: 1, xp: 0,
+    board: [], bench: new Array(CFG.BENCH).fill(null), shop: [null, null, null, null, null],
+    items: [], spells: LORD_TYPES[lordType].spells.map(s => ({ id: s, lvl: 1, rule: 'off' })),
+    equipped: [0, 1], aug: [], streak: 0, alive: true, place: 0, freeRollUsed: false,
+    lastResult: null, ai: null, history: [],
+  };
+}
+function makeUnit(defId, star) { return { uid: G.uidN++, defId, star, items: [] }; }
+const human = () => G.players[0];
+const hasAug = (P, id) => P.aug.some(a => a.id === id);
+function boardLimit(P) { return P.level + (hasAug(P, 'bigBoard') ? 1 : 0); }
+function spellSlots(P) { return 2 + (P.level >= 7 ? 1 : 0) + (hasAug(P, 'spellSlot') ? 1 : 0); }
+function xpCost(P) { return CFG.XP_COST + (hasAug(P, 'spellSlot') ? 1 : 0); }
+function rerollCost(P) { return hasAug(P, 'freeRoll') && !P.freeRollUsed ? 0 : hasAug(P, 'cheapRoll') ? 1 : CFG.REROLL_COST; }
+function allUnits(P) { return [...P.board, ...P.bench.filter(Boolean)]; }
+function stageBaseDamage(stage) { return [0, 0, 2, 3, 5, 8, 10, 12, 15, 18][Math.min(stage, 9)]; }
+
+/* ---------- 유닛 풀 ---------- */
+function takeFromPool(id, n) { G.pool[id] = Math.max(0, (G.pool[id] || 0) - n); }
+function returnToPool(u) { if (UNITS[u.defId]) G.pool[u.defId] += 3 ** (u.star - 1); }
+
+function rollShop(P) {
+  const odds = SHOP_ODDS[P.level];
+  const r = R();
+  for (let i = 0; i < 5; i++) {
+    let id = null;
+    for (let tries = 0; tries < 6 && !id; tries++) {
+      const cost = r.weighted(odds) + 1;
+      const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === cost && G.pool[k] > 0);
+      if (!ids.length) continue;
+      id = ids[r.weighted(ids.map(k => G.pool[k]))];
+    }
+    P.shop[i] = id;
+  }
+}
+
+/* ---------- 구매·판매·합성 ---------- */
+function benchFree(P) { return P.bench.indexOf(null); }
+function copiesOf(P, defId, star = 1) { return allUnits(P).filter(u => u.defId === defId && u.star === star).length; }
+
+function buyUnit(P, slot) {
+  const id = P.shop[slot];
+  if (!id) return false;
+  const cost = UNITS[id].cost;
+  if (P.gold < cost || G.pool[id] <= 0) return false;
+  const free = benchFree(P);
+  if (free < 0 && copiesOf(P, id) < 2) return false;
+  P.gold -= cost;
+  takeFromPool(id, 1);
+  P.shop[slot] = null;
+  const u = makeUnit(id, 1);
+  if (free >= 0) P.bench[free] = u;
+  else P.bench.push(u); // 즉시 합성되어 사라질 임시 칸
+  checkMerge(P);
+  const extra = P.bench.slice(CFG.BENCH).filter(Boolean);
+  P.bench = P.bench.slice(0, CFG.BENCH);
+  for (const x of extra) { const f = benchFree(P); if (f >= 0) P.bench[f] = x; }
+  return true;
+}
+
+function checkMerge(P) {
+  for (let star = 1; star <= 2; star++) {
+    let merged = true;
+    while (merged) {
+      merged = false;
+      const groups = {};
+      for (const u of allUnits(P)) if (u.star === star) (groups[u.defId] = groups[u.defId] || []).push(u);
+      for (const id in groups) {
+        const g = groups[id];
+        if (g.length < 3) continue;
+        // 보드 위의 유닛을 우선 남긴다
+        g.sort((a, b) => (P.board.includes(b) ? 1 : 0) - (P.board.includes(a) ? 1 : 0));
+        const keep = g[0], gone = g.slice(1, 3);
+        const items = [...keep.items];
+        for (const x of gone) {
+          items.push(...x.items);
+          removeUnit(P, x);
+        }
+        keep.star = star + 1;
+        keep.items = [];
+        for (const it of items) if (!equipItem(keep, it)) P.items.push(it);
+        if (P.isHuman) toast(`${UNITS[id].emoji} ${UNITS[id].name} ${'★'.repeat(keep.star)} 합성!`, 'gold');
+        merged = true;
+        break;
+      }
+    }
+  }
+}
+function removeUnit(P, u) {
+  const bi = P.board.indexOf(u);
+  if (bi >= 0) P.board.splice(bi, 1);
+  const ci = P.bench.indexOf(u);
+  if (ci >= 0) P.bench[ci] = null;
+}
+function sellPrice(u) { const c = UNITS[u.defId].cost; return u.star === 1 ? c : c * 3 ** (u.star - 1) - (c > 1 ? 1 : 0); }
+function sellUnit(P, u) {
+  removeUnit(P, u);
+  P.gold += sellPrice(u);
+  P.items.push(...u.items);
+  returnToPool(u);
+}
+
+function buyXp(P) {
+  if (P.level >= 9 || P.gold < xpCost(P)) return false;
+  P.gold -= xpCost(P);
+  addXp(P, CFG.XP_AMOUNT);
+  return true;
+}
+function addXp(P, n) {
+  P.xp += n;
+  while (P.level < 9 && P.xp >= XP_TABLE[P.level]) {
+    P.xp -= XP_TABLE[P.level];
+    P.level++;
+    if (P.isHuman) toast(`레벨 ${P.level}! 보드 유닛 ${boardLimit(P)}명`, 'gold');
+  }
+  if (P.level >= 9) P.xp = 0;
+}
+function reroll(P) {
+  const c = rerollCost(P);
+  if (P.gold < c) return false;
+  P.gold -= c;
+  if (c === 0) P.freeRollUsed = true;
+  rollShop(P);
+  return true;
+}
+
+/* ---------- 아이템 ---------- */
+// 재료가 이미 있으면 합쳐서 완성 아이템이 된다. 유닛당 최대 3개.
+function equipItem(u, it) {
+  if (COMPONENTS[it]) {
+    const ci = u.items.findIndex(x => COMPONENTS[x]);
+    if (ci >= 0) { u.items[ci] = itemKey(u.items[ci], it); return true; }
+  }
+  if (u.items.length >= CFG.ITEM_MAX) return false;
+  u.items.push(it);
+  return true;
+}
+
+/* ---------- 주문 ---------- */
+function equippedSpells(P) {
+  return P.equipped.slice(0, spellSlots(P)).map(i => P.spells[i]).filter(Boolean);
+}
+function toggleEquip(P, idx) {
+  const pos = P.equipped.indexOf(idx);
+  if (pos >= 0) { P.equipped.splice(pos, 1); return true; }
+  if (P.equipped.length >= spellSlots(P)) return false;
+  if (SPELLS[P.spells[idx].id].once && P.equipped.some(i => SPELLS[P.spells[i].id].once)) {
+    if (P.isHuman) toast('전투당 1회 주문은 1장만 가져갈 수 있습니다', 'bad');
+    return false;
+  }
+  P.equipped.push(idx);
+  return true;
+}
+function upgradeSpell(P, idx) {
+  const s = P.spells[idx];
+  if (!s || s.lvl >= 3) return false;
+  const cost = SPELLS[s.id].up[s.lvl - 1];
+  if (P.gold < cost) return false;
+  P.gold -= cost;
+  s.lvl++;
+  return true;
+}
+function addSpell(P, id) {
+  if (P.spells.some(s => s.id === id)) return false;
+  P.spells.push({ id, lvl: 1, rule: 'off' });
+  const idx = P.spells.length - 1;
+  if (P.equipped.length < spellSlots(P)) toggleEquip(P, idx);
+  return true;
+}
+function spellOffers(P, n) {
+  const pool = SPELL_KEYS.filter(id => !P.spells.some(s => s.id === id));
+  return R().shuffle(pool).slice(0, n);
+}
+
+/* ---------- 증강 ---------- */
+function augmentOffers(P) {
+  const r = R();
+  const keys = r.shuffle(AUG_KEYS.filter(k => !hasAug(P, k) || k === 'emblem')).slice(0, 3);
+  return keys.map(id => {
+    const o = { id };
+    if (AUGMENTS[id].param === 'trait') {
+      const counts = computeTraits(allUnits(P), []);
+      const owned = TRAIT_KEYS.filter(t => counts[t]);
+      o.param = owned.length ? r.pick(owned) : r.pick(TRAIT_KEYS);
+    }
+    return o;
+  });
+}
+function augName(a) { return AUGMENTS[a.id].name + (a.param ? ` (${TRAITS[a.param].name})` : ''); }
+function augDesc(a) { return AUGMENTS[a.id].desc.replace('{trait}', a.param ? TRAITS[a.param].name : ''); }
+function applyAugment(P, a) {
+  P.aug.push(a);
+  const r = R();
+  switch (a.id) {
+    case 'loot': for (let i = 0; i < 2; i++) P.items.push(r.pick(COMP_KEYS)); break;
+    case 'cash': P.gold += 15; break;
+    case 'heartyHP': P.hp += 20; break;
+    case 'spellHone': for (const s of P.spells) s.lvl = Math.min(3, s.lvl + 1); break;
+    case 'library': for (const id of spellOffers(P, 2)) addSpell(P, id); break;
+    case 'hire': {
+      for (let i = 0; i < 2; i++) {
+        const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === 3 && G.pool[k] > 0);
+        if (!ids.length || benchFree(P) < 0) break;
+        const id = r.pick(ids); takeFromPool(id, 1);
+        P.bench[benchFree(P)] = makeUnit(id, 1);
+      }
+      checkMerge(P);
+      break;
+    }
+  }
+}
+
+/* ---------- 라운드 구성 ---------- */
+// 1단계: 몬스터 3라운드. 2단계부터: 대전, 대전, 대전, 공용 선택, 대전, 대전, 몬스터
+function roundType(stage, round) {
+  if (stage === 1) return 'pve';
+  return ['pvp', 'pvp', 'pvp', 'carousel', 'pvp', 'pvp', 'pve'][round - 1];
+}
+function roundsInStage(stage) { return stage === 1 ? 3 : 7; }
+function roundLabel() { return `${G.stage}-${G.round}`; }
+function advanceRound() {
+  G.round++;
+  if (G.round > roundsInStage(G.stage)) { G.stage++; G.round = 1; }
+  G.roundsPlayed++;
+}
+function augmentDue() { return G.round === 1 && G.stage >= 2 && G.stage <= 4; }
+
+function interest(P) { return Math.min(Math.floor(P.gold / 10), hasAug(P, 'bigInterest') ? 7 : CFG.MAX_INTEREST); }
+function streakBonus(P) {
+  const s = Math.abs(P.streak);
+  const b = s >= 6 ? 3 : s >= 4 ? 2 : s >= 2 ? 1 : 0;
+  return b ? b + (hasAug(P, 'streakPlus') ? 1 : 0) : 0;
+}
+// 준비 단계 시작: 수입, 경험치, 상점
+function startPrep() {
+  for (const P of G.players) {
+    if (!P.alive) continue;
+    const inc = CFG.BASE_INCOME + interest(P) + streakBonus(P) + (hasAug(P, 'income') ? 1 : 0);
+    P.gold += inc;
+    P.lastIncome = inc;
+    if (G.roundsPlayed > 0) addXp(P, 2 + (hasAug(P, 'scholar') ? 2 : 0));
+    P.freeRollUsed = false;
+    rollShop(P);
+  }
+}
+
+/* ---------- 전투 명세 ---------- */
+function specOf(P, opts = {}) {
+  const diff = DIFFICULTY[G.difficulty];
+  return {
+    name: P.name, emoji: P.emoji, isPlayer: P.isHuman,
+    units: P.board.map(u => ({ defId: u.defId, star: u.star, items: u.items, r: u.r, c: u.c })),
+    traits: computeTraits(P.board, P.aug), aug: P.aug, lordType: P.lordType,
+    spells: equippedSpells(P).map(s => ({ id: s.id, lvl: s.lvl, rule: s.rule })),
+    ai: P.isHuman ? null : { tend: P.ai.p.spell, castDelay: diff.castDelay, mult: G.difficulty === 'hard' ? 1 : CFG.AUTO_CAST_MULT },
+    forceAuto: !!opts.forceAuto,
+  };
+}
+function monsterSpec() {
+  const key = G.stage === 1 ? G.round : 's' + Math.min(G.stage, 6);
+  const scale = G.stage <= 2 ? 1 : 1 + (G.stage - 2) * 0.18;
+  return {
+    name: '중립 몬스터', emoji: '👾', isPlayer: false, units: MONSTER_WAVES[key].map(([defId, r, c]) => ({ defId, star: 1, items: [], r, c })),
+    traits: {}, aug: [], lordType: null, spells: [], ai: null, monsterScale: scale,
+  };
+}
+
+/* ---------- 매칭 ---------- */
+function makePairs() {
+  const alive = G.players.filter(P => P.alive);
+  const r = R();
+  let best = null;
+  for (let t = 0; t < 12; t++) {
+    const arr = r.shuffle(alive.slice());
+    const pairs = [];
+    for (let i = 0; i + 1 < arr.length; i += 2) pairs.push([arr[i], arr[i + 1]]);
+    const repeats = pairs.filter(([a, b]) => G.lastOpp[a.id] === b.id).length;
+    const odd = arr.length % 2 ? arr[arr.length - 1] : null;
+    if (!best || repeats < best.repeats) best = { pairs, odd, repeats };
+    if (!repeats) break;
+  }
+  // 홀수면 마지막 군주는 다른 군주의 '유령 복제'와 싸운다 (복제 쪽은 피해 없음)
+  if (best.odd) {
+    const ghost = r.pick(alive.filter(P => P !== best.odd));
+    best.pairs.push([best.odd, ghost, true]);
+  }
+  for (const [a, b, g] of best.pairs) { G.lastOpp[a.id] = b.id; if (!g) G.lastOpp[b.id] = a.id; }
+  return best.pairs;
+}
+
+/* ---------- 전투 결과 적용 ---------- */
+function survivorDamage(list) { return sum(list.map(s => s.star + (s.cost >= 4 ? 1 : 0))); }
+function applyResult(P, won, dmg, pvp, oppName) {
+  if (won) {
+    if (pvp) P.streak = P.streak > 0 ? P.streak + 1 : 1;
+  } else {
+    if (pvp) P.streak = P.streak < 0 ? P.streak - 1 : -1;
+    P.hp -= dmg;
+  }
+  P.lastResult = { won, dmg: won ? 0 : dmg, opp: oppName };
+  P.history.push(won ? 'W' : 'L');
+}
+function processEliminations() {
+  const dead = G.players.filter(P => P.alive && P.hp <= 0).sort((a, b) => a.hp - b.hp);
+  const out = [];
+  for (const P of dead) {
+    const aliveCount = G.players.filter(x => x.alive).length;
+    P.alive = false;
+    P.place = aliveCount;
+    for (const u of allUnits(P)) returnToPool(u);
+    P.board = []; P.bench = new Array(CFG.BENCH).fill(null);
+    out.push(P);
+  }
+  const alive = G.players.filter(P => P.alive);
+  if (alive.length === 1) alive[0].place = 1;
+  return out;
+}
+
+/* ---------- 저장 ---------- */
+function saveGame() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); } catch (e) { /* 저장 불가 환경 */ }
+}
+function loadGame() {
+  try {
+    const s = localStorage.getItem(SAVE_KEY);
+    if (!s) return null;
+    return JSON.parse(s);
+  } catch (e) { return null; }
+}
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* 무시 */ } }
+
+/* ===== 07-ai.js ===== */
+/* =====================================================================
+ * 07. AI 군주 — 성향 파라미터(경제·레벨·집착·리롤·주문)에 따른 준비 단계
+ * ===================================================================== */
+
+function desiredLevel(P) {
+  const p = P.ai.p;
+  const base = [0, 3, 5, 6, 7, 8, 9, 9, 9][Math.min(G.stage, 8)];
+  let d = base + (p.level > 0.7 ? 1 : 0) - (p.level < 0.3 ? 1 : 0);
+  if (p.reroll > 0.7 && G.stage < 5) d = Math.min(d, P.ai.rerollLevel);
+  if (G.stage === 2 && G.round <= 2) d = Math.min(d, 4);
+  return clamp(d, 1, 9);
+}
+
+function aiReserve(P) {
+  const p = P.ai.p;
+  if (G.stage <= 1) return 0;
+  let reserve = Math.round(p.econ * (G.stage === 2 ? 30 : 50));
+  if (P.hp <= 40) reserve = Math.min(reserve, 20);
+  if (P.hp <= 25) reserve = 0;
+  return reserve;
+}
+
+function aiUnitScore(P, id) {
+  const d = UNITS[id];
+  const diff = DIFFICULTY[G.difficulty];
+  const counts = computeTraits(P.board, P.aug);
+  const c1 = copiesOf(P, id, 1), c2 = copiesOf(P, id, 2);
+  let s = c1 * 3 + (c1 === 2 ? 4 : 0) + c2 * 2;
+  for (const t of d.traits) {
+    if (P.ai.focus.includes(t)) s += 2.5 + 3 * P.ai.p.commit;
+    if (counts[t]) s += 1;
+  }
+  s += d.cost * (0.6 + 0.25 * G.stage);
+  if (P.ai.p.reroll > 0.6 && d.cost <= 2) s += 2;
+  s += (R().next() - 0.5) * diff.noise * 8;
+  return s;
+}
+
+function unitPower(u) {
+  return UNITS[u.defId].cost * [0, 1, 2.6, 6][u.star] * 3 + u.items.length * 2.5;
+}
+
+function aiSellWorst(P, againstScore) {
+  let worst = null, wv = 1e9;
+  for (const u of P.bench) if (u) { const v = unitPower(u) + copiesOf(P, u.defId, u.star) * 2; if (v < wv) { wv = v; worst = u; } }
+  if (worst && wv < againstScore) { sellUnit(P, worst); return true; }
+  return false;
+}
+
+function aiBuyFromShop(P, reserve) {
+  const total = allUnits(P).length;
+  const threshold = total < boardLimit(P) + 2 ? -99 : 5 + G.stage * 0.8;
+  const order = P.shop.map((id, i) => ({ id, i, s: id ? aiUnitScore(P, id) : -99 })).sort((a, b) => b.s - a.s);
+  for (const o of order) {
+    if (!o.id || o.s < threshold) continue;
+    const cost = UNITS[o.id].cost;
+    const merges = copiesOf(P, o.id) >= 2;
+    if (P.gold < cost || (P.gold - cost < reserve && !merges)) continue;
+    if (benchFree(P) < 0 && !merges && !aiSellWorst(P, o.s)) continue;
+    buyUnit(P, o.i);
+  }
+}
+
+function aiPrep(P) {
+  const p = P.ai.p, r = R();
+  // 집착도가 낮으면 가진 유닛에 맞춰 방향을 바꾼다
+  if (G.stage >= 3 && r.chance((1 - p.commit) * 0.35)) {
+    const counts = computeTraits(allUnits(P), P.aug);
+    const top = TRAIT_KEYS.filter(t => counts[t]).sort((a, b) => counts[b] - counts[a]).slice(0, 2);
+    if (top.length === 2) P.ai.focus = top;
+  }
+  const reserve = aiReserve(P);
+  // 주문 강화
+  if (G.stage >= 2) for (const i of P.equipped) {
+    const s = P.spells[i];
+    if (!s || s.lvl >= 3) continue;
+    const c = SPELLS[s.id].up[s.lvl - 1];
+    if (P.gold - c >= reserve && r.chance(p.spell * 0.6)) upgradeSpell(P, i);
+  }
+  // 레벨
+  const want = desiredLevel(P);
+  while (P.level < want && P.gold - xpCost(P) >= reserve) buyXp(P);
+  // 구매
+  aiBuyFromShop(P, reserve);
+  // 리롤
+  const rerollMode = p.reroll > 0.6 && P.level >= P.ai.rerollLevel && G.stage >= 3;
+  const desperate = P.hp <= 30 && G.stage >= 3;
+  const rich = P.level >= 8 && P.gold > 55;
+  const floor = desperate ? 0 : rerollMode ? 12 : 50;
+  let guard = 0;
+  while ((rerollMode || desperate || rich) && P.gold - rerollCost(P) >= floor && guard++ < 25) {
+    reroll(P);
+    aiBuyFromShop(P, floor);
+  }
+  aiArrange(P);
+  aiItems(P);
+  aiSpells(P);
+}
+
+/* ---------- 배치 ---------- */
+function aiArrange(P) {
+  const diff = DIFFICULTY[G.difficulty], r = R();
+  const units = allUnits(P);
+  const limit = boardLimit(P);
+  const chosen = [], seen = new Set(), counts = {};
+  const pool = units.slice();
+  while (chosen.length < limit && pool.length) {
+    let bi = 0, bv = -1e9;
+    pool.forEach((u, i) => {
+      let v = unitPower(u);
+      if (!seen.has(u.defId)) for (const t of UNITS[u.defId].traits) {
+        const n = (counts[t] || 0) + 1;
+        if (TRAITS[t].tiers.includes(n)) v += 6 * (TRAITS[t].tiers.indexOf(n) + 1);
+        else v += P.ai.focus.includes(t) ? 1.5 : 0.5;
+      }
+      if (v > bv) { bv = v; bi = i; }
+    });
+    const u = pool.splice(bi, 1)[0];
+    if (!seen.has(u.defId)) { seen.add(u.defId); for (const t of UNITS[u.defId].traits) counts[t] = (counts[t] || 0) + 1; }
+    chosen.push(u);
+  }
+  // 보드 ↔ 대기석 재배치
+  P.board = [];
+  P.bench = new Array(CFG.BENCH).fill(null);
+  pool.slice(0, CFG.BENCH).forEach((u, i) => { P.bench[i] = u; });
+  for (const u of pool.slice(CFG.BENCH)) sellUnit(P, u);
+  placeFormation(P, chosen);
+  // 쉬움: 배치 실수
+  for (const u of P.board) if (r.chance(diff.misplace)) {
+    const free = [];
+    for (let rr = 0; rr < CFG.ROWS; rr++) for (let cc = 0; cc < CFG.COLS; cc++) if (!P.board.some(x => x.r === rr && x.c === cc)) free.push([rr, cc]);
+    if (free.length) [u.r, u.c] = r.pick(free);
+  }
+}
+
+function placeFormation(P, list) {
+  const taken = new Set();
+  const put = (u, cells) => {
+    for (const [r, c] of cells) if (!taken.has(r * 10 + c)) { taken.add(r * 10 + c); u.r = r; u.c = c; P.board.push(u); return; }
+  };
+  const frontCells = [3, 2, 4, 1, 5, 0, 6].map(c => [0, c]).concat([3, 2, 4, 1, 5, 0, 6].map(c => [1, c]));
+  const flankCells = [[1, 0], [1, 6], [0, 0], [0, 6], [1, 1], [1, 5], [2, 0], [2, 6]];
+  const backCells = [0, 6, 1, 5, 2, 4, 3].map(c => [3, c]).concat([0, 6, 1, 5, 2, 4, 3].map(c => [2, c]));
+  const all = [...frontCells, ...backCells];
+  // 어려움: 플레이어가 돌격대로 뒷줄을 노리면 수호자 하나를 뒷줄에 세운다
+  const H = G ? human() : null;
+  const counter = H && DIFFICULTY[G.difficulty].counter && H.alive && traitTier('vanguard', computeTraits(H.board, H.aug).vanguard || 0) >= 1;
+  const role = u => UNITS[u.defId].roles[0];
+  const sorted = list.slice().sort((a, b) => unitPower(b) - unitPower(a));
+  let backGuard = counter ? sorted.filter(u => role(u) === 'guardian')[1] : null;
+  for (const u of sorted) {
+    const ro = role(u);
+    if (u === backGuard) put(u, [[3, 3], [3, 2], [3, 4], ...all]);
+    else if (ro === 'guardian' || ro === 'vanguard') put(u, [...frontCells, ...all]);
+    else if (ro === 'assassin') put(u, [...flankCells, ...all]);
+    else put(u, [...backCells, ...all]);
+  }
+}
+
+/* ---------- 아이템: 핵심 딜러에게 몰아준다 ---------- */
+const CARRY_COMPS = ['sword', 'bow', 'rod', 'glove', 'tear'];
+function aiItems(P) {
+  if (!P.items.length || !P.board.length) return;
+  const isTankRole = u => ['guardian', 'vanguard'].includes(UNITS[u.defId].roles[0]);
+  const carry = P.board.filter(u => !isTankRole(u)).sort((a, b) => unitPower(b) - unitPower(a))[0] || P.board[0];
+  const tank = P.board.filter(isTankRole).sort((a, b) => unitPower(b) - unitPower(a))[0] || carry;
+  const keep = [];
+  // 완성 아이템
+  for (const it of P.items.filter(x => !COMPONENTS[x])) {
+    const st = itemInfo(it).stats;
+    const tanky = (st.armor || 0) + (st.mr || 0) + (st.hp || 0) / 6 > (st.atk || 0) + (st.ap || 0) + (st.as || 0) * 100 + (st.crit || 0) * 100;
+    const target = tanky ? tank : carry;
+    if (!equipItem(target, it) && !equipItem(tanky ? carry : tank, it)) keep.push(it);
+  }
+  // 재료: 두 개씩 묶어서 장착
+  let comps = P.items.filter(x => COMPONENTS[x]);
+  comps.sort((a, b) => CARRY_COMPS.includes(b) - CARRY_COMPS.includes(a));
+  while (comps.length >= 2 || (comps.length === 1 && G.stage >= 4)) {
+    const a = comps.shift();
+    const forCarry = CARRY_COMPS.includes(a);
+    const target = [forCarry ? carry : tank, forCarry ? tank : carry].find(u => u.items.length < CFG.ITEM_MAX || u.items.some(x => COMPONENTS[x]));
+    if (!target) { keep.push(a, ...comps); comps = []; break; }
+    equipItem(target, a);
+    if (comps.length) {
+      const prefIdx = comps.findIndex(x => CARRY_COMPS.includes(x) === forCarry);
+      const b = comps.splice(prefIdx >= 0 ? prefIdx : 0, 1)[0];
+      if (!equipItem(target, b)) keep.push(b);
+    }
+  }
+  P.items = keep.concat(comps);
+}
+
+/* ---------- 주문 선택 ---------- */
+function aiSpellScore(P, s) {
+  const sp = SPELLS[s.id];
+  const pref = { war: 'atk', guard: 'def', tactic: 'ctl' }[P.lordType];
+  let v = s.lvl * 2 + (sp.kind === pref ? 2 : 0) + sp.cost * P.ai.p.spell * 0.4;
+  if (DIFFICULTY[G.difficulty].counter) {
+    const H = computeTraits(human().board, human().aug);
+    const dive = (H.assassin || 0) + (H.vanguard || 0), ranged = (H.sniper || 0) + (H.mystic || 0);
+    if (dive >= 3 && ['taunt', 'shield', 'resolve', 'swap'].includes(s.id)) v += 3;
+    if (ranged >= 3 && ['bolt', 'sunder', 'timestop', 'reap'].includes(s.id)) v += 3;
+  }
+  return v;
+}
+function aiSpells(P) {
+  const order = P.spells.map((s, i) => ({ i, v: aiSpellScore(P, s) })).sort((a, b) => b.v - a.v);
+  P.equipped = [];
+  for (const o of order) { if (P.equipped.length >= spellSlots(P)) break; toggleEquip(P, o.i); }
+}
+
+/* ---------- 공용 선택 · 증강 · 주문 보상 ---------- */
+function aiCarouselPick(P, options) {
+  let bi = 0, bv = -1e9;
+  options.forEach((o, i) => {
+    if (o.taken) return;
+    const v = o.kind === 'unit' ? aiUnitScore(P, o.defId) + 3 : (P.spells.some(s => s.id === o.id) ? -50 : 3 + P.ai.p.spell * 9);
+    if (v > bv) { bv = v; bi = i; }
+  });
+  return bi;
+}
+function aiPickAugment(P, offers) {
+  const p = P.ai.p, r = R();
+  const w = offers.map(a => {
+    if (AUGMENTS[a.id].spell) return 1 + p.spell * 3;
+    if (['income', 'bigInterest', 'cash'].includes(a.id)) return 1 + p.econ * 3;
+    if (a.id === 'emblem') return 1 + p.commit * 2;
+    return 1.6;
+  });
+  return offers[r.weighted(w)];
+}
+function aiPickSpell(P, ids) {
+  return ids.slice().sort((a, b) => aiSpellScore(P, { id: b, lvl: 1 }) - aiSpellScore(P, { id: a, lvl: 1 }))[0];
+}
+
+/* ===== 08-render.js ===== */
+/* =====================================================================
+ * 08. 화면 그리기 — 캔버스 보드, 유닛, 체력·마나바, 공격 이펙트, 피해 숫자
+ * ===================================================================== */
+
+const VIEW = { CELL: 64, W: 448, BOARD_H: 512, GAP: 14, BENCH_H: 58 };
+VIEW.H = VIEW.BOARD_H + VIEW.GAP + VIEW.BENCH_H;
+VIEW.BENCH_Y = VIEW.BOARD_H + VIEW.GAP;
+VIEW.BENCH_W = VIEW.W / CFG.BENCH;
+
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+let DPR = 1;
+function resizeCanvas() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = VIEW.W * DPR; canvas.height = VIEW.H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+// 전투 연출 상태
+const FX = { floats: [], projs: [], flashes: [], texts: [], shake: 0 };
+const UI = {
+  hover: null,          // {kind:'board'|'bench', r, c, i}
+  drag: null,           // {unit, from, x, y} 또는 {item, idx}
+  aim: null,            // {slot, step, first}
+  aimHover: null,
+  battle: null,         // 진행 중인 전투 B
+  battleView: false,
+  lastFrame: 0, acc: 0,
+};
+
+function cellCenter(r, c) { return [c * VIEW.CELL + VIEW.CELL / 2, r * VIEW.CELL + VIEW.CELL / 2]; }
+function benchCenter(i) { return [i * VIEW.BENCH_W + VIEW.BENCH_W / 2, VIEW.BENCH_Y + VIEW.BENCH_H / 2]; }
+
+function unitScreenPos(u) {
+  let p = 1;
+  if (u.moveCd > 0 && u.moveDur > 0) p = 1 - u.moveCd / u.moveDur;
+  const [x0, y0] = cellCenter(u.fr, u.fc), [x1, y1] = cellCenter(u.r, u.c);
+  return [x0 + (x1 - x0) * p, y0 + (y1 - y0) * p];
+}
+
+/* ---------- 메인 그리기 ---------- */
+function draw(now) {
+  ctx.clearRect(0, 0, VIEW.W, VIEW.H);
+  drawBoardBg();
+  if (UI.battleView && UI.battle) drawBattle(UI.battle);
+  else drawPrep();
+  drawBench();
+  drawEffects();
+  if (UI.drag && UI.drag.unit) drawDragGhostHint();
+}
+
+function drawBoardBg() {
+  const C = VIEW.CELL;
+  for (let r = 0; r < GROWS; r++) for (let c = 0; c < GCOLS; c++) {
+    const mine = r >= 4;
+    const dark = (r + c) % 2 === 0;
+    ctx.fillStyle = mine ? (dark ? '#3a2e24' : '#33291f') : (dark ? '#2b2420' : '#26201c');
+    ctx.fillRect(c * C, r * C, C, C);
+  }
+  // 중앙선
+  ctx.fillStyle = '#f2c14e33';
+  ctx.fillRect(0, 4 * C - 1, VIEW.W, 2);
+  ctx.strokeStyle = '#00000055'; ctx.lineWidth = 1;
+  for (let r = 0; r <= GROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * C + .5); ctx.lineTo(VIEW.W, r * C + .5); ctx.stroke(); }
+  for (let c = 0; c <= GCOLS; c++) { ctx.beginPath(); ctx.moveTo(c * C + .5, 0); ctx.lineTo(c * C + .5, VIEW.BOARD_H); ctx.stroke(); }
+}
+
+function drawPrep() {
+  const P = human();
+  // 상대 진영 안내
+  ctx.fillStyle = '#ffffff10';
+  ctx.font = '600 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#a8987f88';
+  const t = roundType(G.stage, G.round);
+  ctx.fillText(t === 'pve' ? '👾 중립 몬스터가 기다린다' : '⚔️ 상대 군주 진영', VIEW.W / 2, 2 * VIEW.CELL);
+  ctx.font = '12px sans-serif';
+  ctx.fillText(`보드 ${P.board.length} / ${boardLimit(P)}`, VIEW.W / 2, 2 * VIEW.CELL + 22);
+  // 드래그 중 놓을 수 있는 칸 강조
+  if (UI.drag && UI.drag.unit) {
+    for (let r = 0; r < CFG.ROWS; r++) for (let c = 0; c < CFG.COLS; c++) {
+      const [gr, gc] = toGlobal(0, r, c);
+      ctx.fillStyle = '#f2c14e14';
+      ctx.fillRect(gc * VIEW.CELL + 2, gr * VIEW.CELL + 2, VIEW.CELL - 4, VIEW.CELL - 4);
+    }
+  }
+  if (UI.hover && UI.hover.kind === 'board' && UI.drag) {
+    ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2;
+    ctx.strokeRect(UI.hover.c * VIEW.CELL + 2, UI.hover.r * VIEW.CELL + 2, VIEW.CELL - 4, VIEW.CELL - 4);
+  }
+  for (const u of P.board) {
+    if (UI.drag && UI.drag.unit === u) continue;
+    const [gr, gc] = toGlobal(0, u.r, u.c);
+    const [x, y] = cellCenter(gr, gc);
+    drawUnitToken(x, y, 25, u, { side: 0 });
+  }
+}
+
+function drawBench() {
+  const P = human();
+  ctx.fillStyle = '#1a1512';
+  ctx.fillRect(0, VIEW.BENCH_Y, VIEW.W, VIEW.BENCH_H);
+  for (let i = 0; i < CFG.BENCH; i++) {
+    const x = i * VIEW.BENCH_W;
+    ctx.fillStyle = (UI.hover && UI.hover.kind === 'bench' && UI.hover.i === i && UI.drag) ? '#4a3a26' : '#2a221d';
+    roundRect(x + 2, VIEW.BENCH_Y + 3, VIEW.BENCH_W - 4, VIEW.BENCH_H - 6, 7); ctx.fill();
+    const u = P.bench[i];
+    if (u && !(UI.drag && UI.drag.unit === u)) {
+      const [cx, cy] = benchCenter(i);
+      drawUnitToken(cx, cy - 2, 19, u, { side: 0, small: true });
+    }
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+// 유닛 토큰: 코스트 색 테두리 + 이모지 + 별
+function drawUnitToken(x, y, rad, u, o = {}) {
+  const d = unitDef(u.defId);
+  const col = d.cost ? COST_COLOR[d.cost] : '#777';
+  ctx.save();
+  if (o.alpha != null) ctx.globalAlpha = o.alpha;
+  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.fillStyle = o.side === 1 ? '#3a1d1d' : '#1d2a3a';
+  ctx.fill();
+  ctx.lineWidth = o.small ? 2.5 : 3.5; ctx.strokeStyle = col; ctx.stroke();
+  if (o.side === 1) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#ff5f5f'; ctx.beginPath(); ctx.arc(x, y, rad + 3, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.font = `${Math.round(rad * 1.15)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(d.emoji, x, y + 1);
+  // 별
+  if (u.star > 1) {
+    ctx.font = `bold ${o.small ? 9 : 11}px sans-serif`;
+    ctx.fillStyle = u.star === 3 ? '#ffd84a' : '#d8e6ff';
+    ctx.fillText('★'.repeat(u.star), x, y - rad - (o.small ? 4 : 6));
+  }
+  // 아이템
+  if (u.items && u.items.length) {
+    ctx.font = `${o.small ? 9 : 11}px "Segoe UI Emoji",sans-serif`;
+    const n = u.items.length, w = o.small ? 10 : 13;
+    u.items.forEach((it, i) => ctx.fillText(itemInfo(it).icon, x - (n - 1) * w / 2 + i * w, y + rad + (o.small ? 4 : 7)));
+  }
+  ctx.restore();
+}
+
+/* ---------- 전투 ---------- */
+function drawBattle(B) {
+  // 화염 지대
+  for (const z of B.zones) {
+    ctx.fillStyle = `rgba(255,90,30,${0.18 + 0.08 * Math.sin(performance.now() / 120)})`;
+    ctx.fillRect(0, z.row * VIEW.CELL, VIEW.W, VIEW.CELL);
+    ctx.font = '14px sans-serif';
+    for (let c = 0; c < GCOLS; c++) ctx.fillText('🔥', c * VIEW.CELL + 12, z.row * VIEW.CELL + 14);
+  }
+  drawAimOverlay(B);
+  const list = B.units.filter(u => u.alive || u.ghost > 0 || u.reviving > 0);
+  list.sort((a, b) => a.r - b.r);
+  for (const u of list) {
+    const [x, y] = unitScreenPos(u);
+    u.sx = x; u.sy = y;
+    const alpha = u.ghost > 0 ? 0.45 : u.reviving > 0 ? 0.3 : 1;
+    const isAimTarget = UI.aimHover && UI.aimHover.uid === u.uid;
+    if (u.undying > 0) glow(x, y, 30, '#ffd84a');
+    if (u.taunt > 0) glow(x, y, 30, '#ff8f5a');
+    if (isAimTarget) glow(x, y, 32, '#f2c14e');
+    drawUnitToken(x, y, 23, u, { side: u.side, alpha });
+    if (u.freeze > 0) { ctx.fillStyle = '#8fd8ff66'; ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI * 2); ctx.fill(); }
+    if (u.ghost <= 0 && u.reviving <= 0) drawBars(u, x, y);
+    // 상태 아이콘
+    const icons = [];
+    if (u.stun > 0) icons.push('💫');
+    if (u.burn) icons.push('🔥');
+    if (u.slows.length) icons.push('🧊');
+    if (u.sunder) icons.push('🎯');
+    if (u.taunt > 0) icons.push('🚩');
+    if (icons.length) { ctx.font = '11px "Segoe UI Emoji",sans-serif'; ctx.fillText(icons.join(''), x + 18, y - 22); }
+  }
+}
+function glow(x, y, r, color) {
+  const g = ctx.createRadialGradient(x, y, r * 0.5, x, y, r);
+  g.addColorStop(0, color + 'aa'); g.addColorStop(1, color + '00');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function drawBars(u, x, y) {
+  const w = 44, h = 5, bx = x - w / 2, by = y - 33;
+  const shield = sum(u.shields.map(s => s.amt));
+  const tot = Math.max(u.maxHp, u.hp + shield);
+  ctx.fillStyle = '#000a'; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
+  ctx.fillStyle = u.side === 0 ? '#59d97a' : '#ff5f5f';
+  ctx.fillRect(bx, by, w * (u.hp / tot), h);
+  if (shield > 0) { ctx.fillStyle = '#e8f0ff'; ctx.fillRect(bx + w * (u.hp / tot), by, w * (shield / tot), h); }
+  // 체력 눈금 (300마다)
+  ctx.fillStyle = '#0006';
+  for (let v = 300; v < tot; v += 300) ctx.fillRect(bx + w * (v / tot), by, 1, h);
+  if (u.d.skill) {
+    ctx.fillStyle = '#000a'; ctx.fillRect(bx - 1, by + h + 1, w + 2, 4);
+    ctx.fillStyle = '#5aa9ff'; ctx.fillRect(bx, by + h + 2, w * clamp(u.mana / u.manaMax, 0, 1), 2);
+  }
+}
+
+function drawAimOverlay(B) {
+  if (!UI.aim) return;
+  const S = B.sides[0];
+  const sl = S.spells[UI.aim.slot];
+  const sp = SPELLS[sl.id];
+  const h = UI.aimHover;
+  if (sp.target === 'row' && h && h.r != null) {
+    ctx.fillStyle = '#ff7a3044'; ctx.fillRect(0, h.r * VIEW.CELL, VIEW.W, VIEW.CELL);
+  }
+  if ((sp.target === 'cell') && h && h.r != null) {
+    ctx.fillStyle = '#7cc6ff33';
+    ctx.fillRect((h.c - 1) * VIEW.CELL, (h.r - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
+    ctx.strokeStyle = '#7cc6ff'; ctx.lineWidth = 2;
+    ctx.strokeRect((h.c - 1) * VIEW.CELL, (h.r - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
+  }
+  if (sp.target === 'allyCell' && UI.aim.first && h && h.r != null && !B.occ[h.r][h.c]) {
+    ctx.strokeStyle = '#b07cff'; ctx.lineWidth = 2;
+    ctx.strokeRect(h.c * VIEW.CELL + 3, h.r * VIEW.CELL + 3, VIEW.CELL - 6, VIEW.CELL - 6);
+  }
+  if (UI.aim.first) {
+    const a = unitByUid(B, UI.aim.first);
+    if (a) glow(a.sx || 0, a.sy || 0, 34, '#b07cff');
+  }
+}
+
+/* ---------- 이펙트 ---------- */
+function pushEffects(B, events) {
+  const pos = uid => { const u = unitByUid(B, uid); return u ? unitScreenPos(u) : null; };
+  for (const e of events) {
+    switch (e.t) {
+      case 'atk': {
+        const a = pos(e.uid), b = pos(e.tuid);
+        if (!a || !b) break;
+        if (e.ranged) FX.projs.push({ x0: a[0], y0: a[1], x1: b[0], y1: b[1], t: 0, dur: 0.18, color: e.ghost ? '#c9a6ff' : '#fff2b0' });
+        else FX.flashes.push({ x: b[0], y: b[1], t: 0, dur: 0.15, kind: 'slash' });
+        break;
+      }
+      case 'zap': case 'skillHit': {
+        const a = pos(e.uid), b = pos(e.tuid);
+        if (a && b) FX.projs.push({ x0: a[0], y0: a[1], x1: b[0], y1: b[1], t: 0, dur: 0.22, color: e.t === 'zap' ? '#8fd0ff' : '#d58cff', big: true });
+        break;
+      }
+      case 'dmg': {
+        const p = pos(e.uid); if (!p) break;
+        if (e.a < 1) break;
+        const big = e.a >= 250 || e.crit;
+        FX.floats.push({ x: p[0] + (Math.random() - .5) * 16, y: p[1] - 10, text: Math.round(e.a) + (e.crit ? '!' : ''), color: e.spell ? '#7cc6ff' : e.kind === 'magic' ? '#d58cff' : e.kind === 'true' ? '#ffffff' : (e.crit ? '#ffd84a' : '#ffb27a'), size: big ? 17 : 12, t: 0, dur: 0.8 });
+        break;
+      }
+      case 'heal': { const p = pos(e.uid); if (p) FX.floats.push({ x: p[0], y: p[1] - 14, text: '+' + Math.round(e.a), color: '#59d97a', size: 12, t: 0, dur: 0.8 }); break; }
+      case 'shield': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#e8f0ff' }); break; }
+      case 'stun': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.3, kind: 'ring', color: '#ffd84a' }); break; }
+      case 'skill': {
+        const p = pos(e.uid); if (!p) break;
+        FX.texts.push({ x: p[0], y: p[1] - 40, text: e.name, color: '#d6b4ff', t: 0, dur: 1.1 });
+        FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.35, kind: 'ring', color: '#b07cff' });
+        break;
+      }
+      case 'spell': showSpellBanner(e); {
+        const t = e.target || {};
+        if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === 0 ? '#7cc6ff' : '#ff6b6b' }); }
+        if (t.r != null && t.c != null && t.uid == null) { const [x, y] = cellCenter(t.r, t.c); FX.flashes.push({ x, y, t: 0, dur: 0.6, kind: 'burst', color: '#7cc6ff', size: 90 }); }
+        if (e.id === 'timestop') FX.shake = 0.3;
+        break;
+      }
+      case 'death': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.5, kind: 'burst', color: '#ffffff' }); break; }
+      case 'execute': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '처형!', color: '#ff5f5f', t: 0, dur: 1 }); break; }
+      case 'leap': case 'blink': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
+      case 'ghost': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '유령화', color: '#c9a6ff', t: 0, dur: 0.9 }); break; }
+      case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '수호천사', color: '#fff2b0', t: 0, dur: 1 }); break; }
+      case 'miss': { const p = pos(e.uid); if (p) FX.floats.push({ x: p[0], y: p[1] - 10, text: '회피', color: '#cccccc', size: 11, t: 0, dur: 0.6 }); break; }
+    }
+  }
+}
+
+function drawEffects() {
+  const dt = UI.frameDt || 0.016;
+  for (const p of FX.projs) {
+    p.t += dt;
+    const k = Math.min(1, p.t / p.dur);
+    const x = p.x0 + (p.x1 - p.x0) * k, y = p.y0 + (p.y1 - p.y0) * k;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(x, y, p.big ? 5 : 3, 0, Math.PI * 2); ctx.fill();
+    if (p.big) { ctx.strokeStyle = p.color + '88'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x0 + (p.x1 - p.x0) * Math.max(0, k - .3), p.y0 + (p.y1 - p.y0) * Math.max(0, k - .3)); ctx.lineTo(x, y); ctx.stroke(); }
+  }
+  FX.projs = FX.projs.filter(p => p.t < p.dur);
+  for (const f of FX.flashes) {
+    f.t += dt;
+    const k = f.t / f.dur;
+    ctx.save(); ctx.globalAlpha = Math.max(0, 1 - k);
+    if (f.kind === 'slash') {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(f.x - 12, f.y - 12 + k * 6); ctx.lineTo(f.x + 12, f.y + 12 - k * 6); ctx.stroke();
+    } else if (f.kind === 'ring') {
+      ctx.strokeStyle = f.color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(f.x, f.y, 18 + k * 14, 0, Math.PI * 2); ctx.stroke();
+    } else if (f.kind === 'burst') {
+      const s = (f.size || 40) * (0.4 + k);
+      const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, s);
+      g.addColorStop(0, f.color + 'cc'); g.addColorStop(1, f.color + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(f.x, f.y, s, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  FX.flashes = FX.flashes.filter(f => f.t < f.dur);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of FX.floats) {
+    f.t += dt;
+    const k = f.t / f.dur;
+    ctx.globalAlpha = Math.max(0, 1 - k * k);
+    ctx.font = `800 ${f.size}px sans-serif`;
+    ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+    ctx.strokeText(f.text, f.x, f.y - k * 22);
+    ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y - k * 22);
+  }
+  FX.floats = FX.floats.filter(f => f.t < f.dur);
+  for (const f of FX.texts) {
+    f.t += dt;
+    const k = f.t / f.dur;
+    ctx.globalAlpha = Math.max(0, 1 - k * k);
+    ctx.font = '700 12px sans-serif';
+    ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+    ctx.strokeText(f.text, f.x, f.y - k * 10);
+    ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y - k * 10);
+  }
+  FX.texts = FX.texts.filter(f => f.t < f.dur);
+  ctx.globalAlpha = 1;
+  if (FX.shake > 0) {
+    FX.shake -= dt;
+    ctx.fillStyle = `rgba(140,200,255,${FX.shake})`;
+    ctx.fillRect(0, 0, VIEW.W, VIEW.BOARD_H);
+  }
+}
+
+function showSpellBanner(e) {
+  const el = document.createElement('div');
+  el.className = 'spell-banner' + (e.side === 1 ? ' enemy' : '');
+  el.textContent = `${e.emoji} ${e.lord} — ${e.icon} ${e.name}${e.auto ? ' (자동)' : ''}`;
+  const box = document.getElementById('banner');
+  box.appendChild(el);
+  while (box.children.length > 3) box.removeChild(box.firstChild);
+  setTimeout(() => el.remove(), 1700);
+}
+
+function drawDragGhostHint() {
+  // 대기석 위에서 끄는 동안 상점 영역 판매 강조는 DOM에서 처리
+}
+
+/* ===== 09-ui.js ===== */
+/* =====================================================================
+ * 09. 화면 패널 — 상단 정보, 시너지, 보관함, 주문 카드, 상점, 순위표, 툴팁
+ * ===================================================================== */
+
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.remove(), 2300);
+}
+
+function renderAll() {
+  if (!G) return;
+  renderTop(); renderTraits(); renderInventory(); renderAugs(); renderSpellBar(); renderShop(); renderPlayers();
+}
+
+function renderTop() {
+  const P = human();
+  $('#roundLabel').textContent = roundLabel();
+  const t = roundType(G.stage, G.round);
+  $('#roundType').textContent = { pve: '👾 몬스터', pvp: '⚔️ 대전', carousel: '🎠 공용 선택' }[t];
+  $('#hpVal').textContent = Math.max(0, P.hp);
+  $('#goldVal').textContent = P.gold;
+  $('#interestVal').textContent = `+${interest(P)}`;
+  $('#lvlVal').textContent = P.level;
+  const need = XP_TABLE[P.level];
+  $('#xpVal').textContent = P.level >= 9 ? 'MAX' : `${P.xp}/${need}`;
+  $('#xpFill').style.width = P.level >= 9 ? '100%' : `${(P.xp / need) * 100}%`;
+  $('#streakIcon').textContent = P.streak > 0 ? '🔥' : P.streak < 0 ? '🧊' : '➖';
+  $('#streakVal').textContent = Math.abs(P.streak);
+  $('#btnSpeed').textContent = G.instant ? '즉시 결과' : `${G.battleSpeed}배속`;
+  const prep = G.phase === 'prep';
+  $('#btnXp').disabled = !prep || P.gold < xpCost(P) || P.level >= 9;
+  $('#btnXp').innerHTML = `⬆ 경험치<br><small>${xpCost(P)}🪙</small>`;
+  $('#btnRoll').disabled = P.gold < rerollCost(P) || !P.alive || G.phase === 'over';
+  $('#btnRoll').innerHTML = `🔄 새로고침<br><small>${rerollCost(P)}🪙</small>`;
+  $('#btnReady').disabled = !prep;
+  $('#btnReady').textContent = prep ? '준비 완료 ▶' : G.phase === 'battle' ? '전투 중…' : '대기 중';
+}
+
+function renderTraits() {
+  const P = human();
+  const units = UI.battleView && UI.battle ? null : P.board;
+  const counts = computeTraits(units || P.board, P.aug);
+  const keys = TRAIT_KEYS.filter(t => counts[t]).sort((a, b) => traitTier(b, counts[b]) - traitTier(a, counts[a]) || counts[b] - counts[a]);
+  const box = $('#traits');
+  if (!keys.length) { box.innerHTML = '<div class="empty-note">보드에 유닛을 올리면 시너지가 표시됩니다.</div>'; return; }
+  box.innerHTML = keys.map(t => {
+    const T = TRAITS[t], n = counts[t], tier = traitTier(t, n);
+    const next = T.tiers.find(x => x > n);
+    return `<div class="trait ${tier ? 'on' : 'off'} t${tier}" style="--tc:${T.color}" data-tip="trait:${t}">
+      <div class="ti">${T.icon}</div><div class="tn">${T.name}</div>
+      <div class="tc"><b>${n}</b> / ${next || T.tiers[2]}</div></div>`;
+  }).join('');
+}
+
+function renderInventory() {
+  const P = human();
+  const box = $('#inventory');
+  if (!P.items.length) { box.innerHTML = '<div class="empty-note">아이템 없음</div>'; return; }
+  box.innerHTML = P.items.map((it, i) => {
+    const info = itemInfo(it);
+    return `<div class="item-chip ${info.component ? '' : 'done'}" data-item="${i}" data-tip="item:${it}">${info.icon}</div>`;
+  }).join('');
+}
+
+function renderAugs() {
+  const P = human();
+  $('#augList').innerHTML = P.aug.length ? P.aug.map(a => `<div class="aug-chip" data-tip="aug:${a.id}:${a.param || ''}">${AUGMENTS[a.id].icon} ${esc(augName(a))}</div>`).join('') : '<div class="empty-note">2·3·4단계 시작 시 선택</div>';
+}
+
+function renderSpellBar() {
+  const P = human();
+  const B = UI.battleView ? UI.battle : null;
+  const S = B ? B.sides[0] : null;
+  const lm = S ? S.lm : (hasAug(P, 'manaHead') ? 3 : 0);
+  $('#lmVal').textContent = Math.floor(lm);
+  const bar = $('#lmBar');
+  if (bar.children.length !== 10) bar.innerHTML = '<i><b></b></i>'.repeat(10);
+  [...bar.children].forEach((el, i) => { el.firstChild.style.transform = `scaleX(${clamp(lm - i, 0, 1)})`; });
+  const eq = S ? S.spells : equippedSpells(P);
+  const html = eq.map((s, i) => {
+    const sp = SPELLS[s.id];
+    const cost = S ? spellCostNow(S, s) : spellCost(s.id, s.lvl);
+    const ready = S && spellReady(S, i);
+    const aiming = UI.aim && UI.aim.slot === i;
+    const cdTxt = S && s.cd > 0 ? `<div class="sc-cd">${s.cd.toFixed(1)}</div>` : '';
+    const used = S && s.used;
+    return `<div class="spell-card ${ready ? 'ready' : ''} ${aiming ? 'aiming' : ''} ${used ? 'used' : ''}" data-spell="${i}" data-tip="spell:${s.id}:${s.lvl}">
+      <div class="sc-top"><span class="sc-icon">${sp.icon}</span>${sp.name}<span class="sc-cost">${cost}</span></div>
+      <div class="sc-sub"><span>${'◆'.repeat(s.lvl)}${'◇'.repeat(3 - s.lvl)}</span><span>${sp.once ? '1회' : sp.cd + '초'}</span></div>
+      ${s.rule !== 'off' ? '<div class="sc-auto">자동 시전</div>' : ''}
+      <span class="sc-key">${i + 1}</span>${cdTxt}${used ? '<div class="sc-cd">사용함</div>' : ''}</div>`;
+  }).join('');
+  const box = $('#spellCards');
+  if (box.dataset.html !== html) { box.innerHTML = html || '<div class="empty-note">장착한 주문이 없습니다 (주문서)</div>'; box.dataset.html = html; }
+}
+
+function renderShop() {
+  const P = human();
+  const owned = {};
+  for (const u of allUnits(P)) if (u.star === 1) owned[u.defId] = (owned[u.defId] || 0) + 1;
+  const ownedAny = {};
+  for (const u of allUnits(P)) ownedAny[u.defId] = true;
+  $('#shop').innerHTML = P.shop.map((id, i) => {
+    if (!id) return `<div class="shop-card sold" style="--cc:#333"></div>`;
+    const d = UNITS[id];
+    const cls = [ownedAny[id] ? 'owned' : '', owned[id] >= 2 ? 'merge' : '', P.gold < d.cost ? 'poor' : ''].join(' ');
+    return `<div class="shop-card ${cls}" style="--cc:${COST_COLOR[d.cost]}" data-shop="${i}" data-own="보유 ${owned[id] || 0}" data-tip="unit:${id}:1">
+      <span class="sp">${d.cost}🪙</span><div class="se">${d.emoji}</div><div class="sn">${d.name}</div>
+      <div class="st">${d.traits.map(t => TRAITS[t].icon + TRAITS[t].name).join(' ')}</div></div>`;
+  }).join('');
+}
+
+function renderPlayers() {
+  const list = G.players.slice().sort((a, b) => (b.alive - a.alive) || (b.hp - a.hp) || (a.place - b.place));
+  const opp = UI.currentOppId;
+  $('#players').innerHTML = list.map(P => {
+    const hp = Math.max(0, P.hp);
+    const st = P.streak > 1 ? `🔥${P.streak}` : P.streak < -1 ? `🧊${-P.streak}` : '';
+    return `<div class="prow ${P.isHuman ? 'me' : ''} ${P.alive ? '' : 'dead'} ${opp === P.id ? 'opp' : ''}" data-player="${P.id}">
+      <div class="pe">${P.emoji}</div>
+      <div class="pm"><div class="pn">${esc(P.name)} <span class="ps">Lv${P.level} ${LORD_TYPES[P.lordType].icon} ${st}</span></div>
+      <div class="ph"><i style="width:${Math.min(100, hp)}%"></i></div></div>
+      <div class="pv">${P.alive ? hp : '#' + P.place}</div></div>`;
+  }).join('');
+}
+
+/* ---------- 툴팁 ---------- */
+function unitTooltip(defId, star, u, cu) {
+  const d = unitDef(defId);
+  const m = CFG.STAR_MULT[star] || 1;
+  const sk = d.skill;
+  let skillTxt = '';
+  if (sk) {
+    const parts = sk.fx.map(f => {
+      const v = f.v ? f.v[star - 1] : null;
+      switch (f.t) {
+        case 'dmg': return `${f.kind === 'phys' ? '물리' : '마법'} 피해 ${v}`;
+        case 'heal': return `회복 ${v}`;
+        case 'shield': return `보호막 ${v}`;
+        case 'stun': return `기절 ${v}초`;
+        case 'slow': return `공속 -${pctS(v)}`;
+        case 'burn': return `화상 초당 ${v}`;
+        case 'buff': return f.stat === 'as' ? `공속 +${pctS(v)}` : `방어 +${v}`;
+        case 'leap': return '가장 먼 적에게 도약';
+        case 'execute': return `체력 ${pctS(v)} 이하 처형`;
+        case 'summon': return `묘목 ${f.n}개 소환`;
+      }
+      return '';
+    }).filter(Boolean).join(', ');
+    skillTxt = `<hr><b>${sk.name}</b> <span class="tt-sub">(마나 ${d.mana})</span><br>${parts}`;
+  }
+  const hp = cu ? `${Math.round(cu.hp)}/${Math.round(cu.maxHp)}` : Math.round(d.hp * m);
+  const atk = cu ? Math.round(effAtk(cu)) : Math.round(d.atk * m);
+  const items = (u || cu) ? (u || cu).items : [];
+  return `<h4>${d.emoji} ${d.name} ${'★'.repeat(star)}</h4>
+    <div class="tt-sub">${d.cost ? d.cost + '코스트 · ' : ''}${(d.traits || []).map(t => TRAITS[t].icon + ' ' + TRAITS[t].name).join(' · ')}</div>
+    <div class="tt-row"><span>❤️ ${hp}</span><span>⚔️ ${atk}</span><span>⚡ ${(cu ? effAS(cu) : d.as).toFixed(2)}</span><span>🎯 사거리 ${cu ? cu.range : d.range}</span>
+    <span>🛡️ ${Math.round(cu ? effArmor(cu) : d.armor)}</span><span>🧥 ${Math.round(cu ? effMr(cu) : d.mr)}</span></div>
+    ${skillTxt}
+    ${items.length ? '<hr>' + items.map(it => { const i = itemInfo(it); return `${i.icon} <b>${i.name}</b> — ${i.desc}${i.component ? '' : ' (' + statText(i.stats) + ')'}`; }).join('<br>') : ''}
+    ${u && !UI.battleView ? `<hr><span class="tt-sub">판매가 ${sellPrice(u)}🪙 · 끌어서 이동 · E 키로 판매</span>` : ''}`;
+}
+function traitTooltip(t) {
+  const T = TRAITS[t];
+  const P = human();
+  const n = computeTraits(P.board, P.aug)[t] || 0;
+  const tier = traitTier(t, n);
+  const units = Object.values(UNITS).filter(u => u.traits.includes(t)).map(u => u.emoji).join(' ');
+  return `<h4>${T.icon} ${T.name} <span class="tt-sub">(${T.kind === 'origin' ? '계열' : '역할'})</span></h4>
+    ${T.tiers.map((x, i) => `<div style="opacity:${tier === i + 1 ? 1 : .55}">${tier === i + 1 ? '▶' : '·'} <b>${x}</b>: ${T.desc[i]}</div>`).join('')}
+    <hr><div class="tt-sub">${units}</div>`;
+}
+function spellTooltip(id, lvl) {
+  const sp = SPELLS[id];
+  const next = lvl < 3 ? `<hr>다음 단계(${sp.up[lvl - 1]}🪙): ${spellDesc(id, lvl + 1)} · 마나 ${spellCost(id, lvl + 1)}` : '';
+  return `<h4>${sp.icon} ${sp.name} ${'◆'.repeat(lvl)}</h4><div class="tt-sub">마나 ${spellCost(id, lvl)} · ${sp.once ? '전투당 1회' : '재사용 ' + sp.cd + '초'} · ${{ atk: '공격형', def: '방어형', ctl: '제어형' }[sp.kind]}</div>
+    <div>${spellDesc(id, lvl)}</div>${next}`;
+}
+
+function showTip(html, x, y) {
+  const el = $('#tooltip');
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let tx = x + 16, ty = y + 14;
+  if (tx + w > window.innerWidth - 8) tx = x - w - 12;
+  if (ty + h > window.innerHeight - 8) ty = window.innerHeight - h - 8;
+  el.style.left = Math.max(8, tx) + 'px'; el.style.top = Math.max(8, ty) + 'px';
+}
+function hideTip() { $('#tooltip').classList.add('hidden'); }
+
+function tipFor(spec) {
+  const [kind, a, b] = spec.split(':');
+  if (kind === 'trait') return traitTooltip(a);
+  if (kind === 'unit') return unitTooltip(a, +b || 1);
+  if (kind === 'item') { const i = itemInfo(spec.slice(5)); return `<h4>${i.icon} ${i.name}</h4><div>${i.desc}</div>${i.component ? '<div class="tt-sub">다른 재료와 같은 유닛에 장착하면 완성 아이템이 됩니다.</div>' : `<div class="tt-sub">${statText(i.stats)}</div>`}`; }
+  if (kind === 'spell') return spellTooltip(a, +b || 1);
+  if (kind === 'aug') { const ag = { id: a, param: b || undefined }; return `<h4>${AUGMENTS[a].icon} ${esc(augName(ag))}</h4><div>${esc(augDesc(ag))}</div>`; }
+  return '';
+}
+
+/* ===== 10-modals.js ===== */
+/* =====================================================================
+ * 10. 모달 — 시작 화면, 증강, 주문 보상, 공용 선택, 주문서, 군주 열람, 결과
+ * ===================================================================== */
+
+function openModal(html, bind) {
+  $('#modalBox').innerHTML = html;
+  $('#modal').classList.remove('hidden');
+  hideTip();
+  if (bind) bind($('#modalBox'));
+}
+function closeModal() { $('#modal').classList.add('hidden'); $('#modalBox').innerHTML = ''; }
+const modalOpen = () => !$('#modal').classList.contains('hidden');
+
+/* ---------- 시작 화면 ---------- */
+function showTitle() {
+  const saved = loadGame();
+  let lord = 'war', diff = 'normal';
+  openModal(`
+    <div class="title-hero"><div class="crown">👑</div><h1>일곱 군주의 탁자</h1>
+    <p>상점에서 유닛을 사서 배치하면 전투는 자동으로. 군주 마나로 주문을 시전해 전투에 개입하라.<br>성향이 서로 다른 AI 군주 7명 사이에서 마지막까지 살아남으면 승리.</p></div>
+    <h3>군주 유형</h3>
+    <div class="choice-grid" id="lordPick">${Object.entries(LORD_TYPES).map(([k, L]) => `
+      <div class="choice ${k === lord ? 'sel' : ''}" data-lord="${k}"><div class="ci">${L.icon}</div><div class="cn">${L.name}</div>
+      <div class="cd">${L.desc}<br>패시브: <b>${L.passive}</b><br>시작 주문: ${L.spells.map(s => SPELLS[s].icon + ' ' + SPELLS[s].name).join(', ')}</div></div>`).join('')}</div>
+    <div class="field"><label>난이도</label><div class="seg" id="diffPick">${Object.entries(DIFFICULTY).map(([k, D]) => `<button data-diff="${k}" class="${k === diff ? 'on' : ''}">${D.name}</button>`).join('')}</div></div>
+    <div class="field"><label>시드</label><input id="seedIn" placeholder="비우면 무작위" inputmode="numeric" style="width:160px"><small>같은 시드 = 같은 판</small></div>
+    <div class="row-btns">
+      <button id="tSim" class="ghost">📊 밸런스 시뮬레이션</button>
+      <button id="tHelp" class="ghost">도움말</button>
+      ${saved && !saved.over ? `<button id="tCont">이어하기 (${saved.stage}-${saved.round})</button>` : ''}
+      <button id="tNew" class="primary">새 게임 시작</button>
+    </div>`, box => {
+    box.querySelectorAll('[data-lord]').forEach(el => el.onclick = () => {
+      lord = el.dataset.lord; box.querySelectorAll('[data-lord]').forEach(x => x.classList.toggle('sel', x === el));
+    });
+    box.querySelectorAll('[data-diff]').forEach(el => el.onclick = () => {
+      diff = el.dataset.diff; box.querySelectorAll('[data-diff]').forEach(x => x.classList.toggle('on', x === el));
+    });
+    box.querySelector('#tNew').onclick = () => {
+      const seed = parseInt(box.querySelector('#seedIn').value, 10);
+      closeModal();
+      startNewGame({ lordType: lord, difficulty: diff, seed: isNaN(seed) ? 0 : seed });
+    };
+    const c = box.querySelector('#tCont');
+    if (c) c.onclick = () => { closeModal(); continueGame(saved); };
+    box.querySelector('#tHelp').onclick = () => showHelp(showTitle);
+    box.querySelector('#tSim').onclick = () => showSimulation(showTitle);
+  });
+}
+
+function showHelp(back) {
+  openModal(`<h2>도움말</h2><p class="sub">배치는 전략, 주문은 전술.</p>
+    <div class="help-grid">
+      <div><b>준비 단계</b><br>상점에서 유닛을 사고(클릭), 대기석의 유닛을 보드 아래쪽 4줄로 끌어다 놓습니다. 레벨만큼 보드에 올릴 수 있습니다. 같은 유닛 3개 → ★2, ★2 3개 → ★3.</div>
+      <div><b>경제</b><br>매 라운드 기본 5골드 + 이자(10골드당 1, 최대 5) + 연승·연패 보너스(2/4/6연속: 1/2/3). 경험치 4골드, 새로고침 2골드.</div>
+      <div><b>시너지</b><br>계열(화염·서리·숲·망령·기계·별빛)과 역할(수호자·돌격대·저격수·주술사·암살자·치유사)이 서로 다른 유닛 2/4/6명이면 발동합니다.</div>
+      <div><b>아이템</b><br>보관함의 재료를 유닛에 끌어다 놓으면 장착되고, 재료 2개가 모이면 완성 아이템이 됩니다. 유닛당 최대 3개. 판매 시 보관함으로 돌아옵니다.</div>
+      <div><b>군주 주문</b><br>전투 중 군주 마나(초당 1.5, 아군 처치 시 +1)가 차면 주문 카드가 밝아집니다. 카드 클릭 또는 <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> → 조준(전투 0.25배속) → 대상 클릭. <kbd>Tab</kbd> 대상 순환, <kbd>Enter</kbd> 시전, <kbd>Esc</kbd>/우클릭 취소.</div>
+      <div><b>자동 시전</b><br>주문서에서 주문마다 자동 시전 조건을 고를 수 있습니다. 자동 시전은 직접 시전보다 효과가 10% 약합니다. '즉시 결과' 속도에서는 모든 주문이 자동 규칙으로 시전됩니다.</div>
+      <div><b>단축키</b><br><kbd>D</kbd> 새로고침 · <kbd>F</kbd> 경험치 · <kbd>E</kbd> 마우스 아래 유닛 판매 · <kbd>Space</kbd> 준비 완료 · <kbd>B</kbd> 주문서 · <kbd>S</kbd> 전투 속도</div>
+      <div><b>라운드</b><br>1단계는 몬스터 3라운드. 2단계부터 대전·공용 선택(체력 낮은 순으로 선택)·몬스터 라운드가 섞입니다. 2·3·4단계 시작 시 증강을 고릅니다. 전투는 30초 제한이며, 15초부터 연장전으로 피해가 점점 커집니다.</div>
+    </div>
+    <div class="row-btns"><button class="primary" id="hBack">닫기</button></div>`, box => {
+    box.querySelector('#hBack').onclick = () => (back ? back() : closeModal());
+  });
+}
+
+function showMenu() {
+  openModal(`<h2>메뉴</h2><p class="sub">시드 ${G.seed} · 난이도 ${DIFFICULTY[G.difficulty].name} · ${roundLabel()}</p>
+    <div class="row-btns" style="justify-content:flex-start">
+      <button id="mResume" class="primary">계속하기</button>
+      <button id="mHelp">도움말</button>
+      <button id="mSim">밸런스 시뮬레이션</button>
+      <button id="mTitle">시작 화면으로 (자동 저장됨)</button>
+    </div>`, box => {
+    box.querySelector('#mResume').onclick = closeModal;
+    box.querySelector('#mHelp').onclick = () => showHelp(showMenu);
+    box.querySelector('#mSim').onclick = () => showSimulation(showMenu);
+    box.querySelector('#mTitle').onclick = () => { if (G.phase === 'prep') saveGame(); stopBattle(); showTitle(); };
+  });
+}
+
+/* ---------- 증강 ---------- */
+function showAugmentPick(offers, done) {
+  openModal(`<h2>증강 선택</h2><p class="sub">${G.stage}단계 시작 — 세 가지 중 하나를 고르세요.</p>
+    <div class="choice-grid">${offers.map((a, i) => `<div class="choice ${AUGMENTS[a.id].spell ? 'spellc' : ''}" data-i="${i}">
+      <div class="ci">${AUGMENTS[a.id].icon}</div><div class="cn">${esc(augName(a))}</div><div class="cd">${esc(augDesc(a))}${AUGMENTS[a.id].spell ? '<br><b style="color:#7cc6ff">주문 증강</b>' : ''}</div></div>`).join('')}</div>`, box => {
+    box.querySelectorAll('[data-i]').forEach(el => el.onclick = () => { closeModal(); done(offers[+el.dataset.i]); });
+  });
+}
+
+/* ---------- 주문 보상 ---------- */
+function showSpellPick(ids, done) {
+  if (!ids.length) return done(null);
+  openModal(`<h2>새 주문</h2><p class="sub">보상으로 주문 하나를 얻습니다. 장착은 주문서에서 바꿀 수 있습니다.</p>
+    <div class="choice-grid">${ids.map(id => { const sp = SPELLS[id]; return `<div class="choice spellc" data-id="${id}">
+      <div class="ci">${sp.icon}</div><div class="cn">${sp.name} <small>마나 ${sp.cost}</small></div>
+      <div class="cd">${spellDesc(id, 1)}<br>${sp.once ? '전투당 1회' : '재사용 ' + sp.cd + '초'}</div></div>`; }).join('')}</div>`, box => {
+    box.querySelectorAll('[data-id]').forEach(el => el.onclick = () => { closeModal(); done(el.dataset.id); });
+  });
+}
+
+/* ---------- 주문서 ---------- */
+function showSpellbook() {
+  const P = human();
+  const prep = G.phase === 'prep';
+  const render = () => {
+    const slots = spellSlots(P);
+    openModal(`<h2>📖 주문서</h2><p class="sub">장착 ${P.equipped.length}/${slots}칸 (레벨 7에 3칸) · 강화하면 효과가 오르거나 마나가 줄어듭니다. ${prep ? '' : '<b>전투 중에는 변경할 수 없습니다.</b>'}</p>
+      ${P.spells.map((s, i) => {
+        const sp = SPELLS[s.id], eq = P.equipped.includes(i);
+        const upCost = s.lvl < 3 ? sp.up[s.lvl - 1] : null;
+        return `<div class="spellbook-row ${eq ? 'eq' : ''}"><div class="si">${sp.icon}</div>
+          <div><b>${sp.name}</b> <small>${'◆'.repeat(s.lvl)}${'◇'.repeat(3 - s.lvl)} · 마나 ${spellCost(s.id, s.lvl)} · ${sp.once ? '전투당 1회' : sp.cd + '초'}</small>
+          <div class="sd">${spellDesc(s.id, s.lvl)}${upCost ? ` → <i>${spellDesc(s.id, s.lvl + 1)}</i>` : ''}</div>
+          <select data-rule="${i}" ${prep ? '' : 'disabled'}>${['off', ...sp.auto].map(r => `<option value="${r}" ${s.rule === r ? 'selected' : ''}>자동: ${AUTO_RULES[r]}</option>`).join('')}</select></div>
+          <div class="sx"><button class="small ${eq ? 'primary' : ''}" data-eq="${i}" ${prep ? '' : 'disabled'}>${eq ? '장착 해제' : '장착'}</button>
+          <button class="small" data-up="${i}" ${prep && upCost && P.gold >= upCost ? '' : 'disabled'}>${upCost ? `강화 ${upCost}🪙` : '최대'}</button></div></div>`;
+      }).join('')}
+      <div class="row-btns"><button class="primary" id="sbClose">닫기</button></div>`, box => {
+      box.querySelectorAll('[data-eq]').forEach(el => el.onclick = () => { toggleEquip(P, +el.dataset.eq); render(); renderAll(); });
+      box.querySelectorAll('[data-up]').forEach(el => el.onclick = () => { if (upgradeSpell(P, +el.dataset.up)) toast('주문 강화!', 'gold'); render(); renderAll(); });
+      box.querySelectorAll('[data-rule]').forEach(el => el.onchange = () => { P.spells[+el.dataset.rule].rule = el.value; renderAll(); });
+      box.querySelector('#sbClose').onclick = closeModal;
+    });
+  };
+  render();
+}
+
+/* ---------- 군주 열람 ---------- */
+function showPlayer(id) {
+  const P = G.players.find(p => p.id === id);
+  if (!P) return;
+  const counts = computeTraits(P.board, P.aug);
+  const cells = [];
+  for (let r = CFG.ROWS - 1; r >= 0; r--) for (let c = 0; c < CFG.COLS; c++) {
+    const u = P.board.find(x => x.r === r && x.c === c);
+    cells.push(u ? `<div style="border-color:${COST_COLOR[UNITS[u.defId].cost]}" data-tip="unit:${u.defId}:${u.star}">${UNITS[u.defId].emoji}<small>${'★'.repeat(u.star)}</small></div>` : '<div></div>');
+  }
+  const traits = TRAIT_KEYS.filter(t => traitTier(t, counts[t] || 0)).map(t => `${TRAITS[t].icon}${TRAITS[t].name} ${counts[t]}`).join(' · ') || '없음';
+  const spells = equippedSpells(P).map(s => `${SPELLS[s.id].icon} ${SPELLS[s.id].name} ${'◆'.repeat(s.lvl)}`).join(', ') || '없음';
+  const owned = P.spells.map(s => SPELLS[s.id].icon).join(' ');
+  openModal(`<h2>${P.emoji} ${esc(P.name)}</h2>
+    <p class="sub">${LORD_TYPES[P.lordType].icon} ${LORD_TYPES[P.lordType].name}${P.ai ? ' · ' + esc(P.ai.style) : ''} · 체력 ${Math.max(0, P.hp)} · Lv${P.level} · 🪙${P.gold} · ${P.streak > 0 ? P.streak + '연승' : P.streak < 0 ? -P.streak + '연패' : '연속 기록 없음'}</p>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+      <div><h3>보드 <small>(앞줄이 아래)</small></h3><div class="mini-board">${cells.join('')}</div>
+        <div style="margin-top:6px;font-size:13px">대기석: ${P.bench.filter(Boolean).map(u => UNITS[u.defId].emoji + (u.star > 1 ? '★' + u.star : '')).join(' ') || '없음'}</div></div>
+      <div style="font-size:13px;line-height:1.7"><h3>시너지</h3>${traits}<h3 class="mt">가져갈 주문</h3>${spells}<br><small>보유: ${owned}</small>
+        <h3 class="mt">증강</h3>${P.aug.map(a => AUGMENTS[a.id].icon + ' ' + esc(augName(a))).join('<br>') || '없음'}
+        <h3 class="mt">최근 전적</h3>${P.history.slice(-8).map(h => h === 'W' ? '🟢' : '🔴').join('') || '-'}</div>
+    </div>
+    <div class="row-btns"><button class="primary" id="pClose">닫기</button></div>`, box => { box.querySelector('#pClose').onclick = closeModal; });
+}
+
+/* ---------- 전투 결과 ---------- */
+function showBattleResult(info, done) {
+  const B = info.B;
+  const mine = B.units.filter(u => u.side === 0 && !u.summon);
+  const maxD = Math.max(1, ...mine.map(u => u.dmgDone));
+  const S = B.sides[0].stats;
+  const head = info.won ? '<div class="result-head win">승리!</div>' : info.timeout ? `<div class="result-head lose">시간 초과 — 양쪽 패배 (-${info.dmg})</div>` : `<div class="result-head lose">패배 (-${info.dmg})</div>`;
+  openModal(`${head}<p class="sub">${roundLabel()} · 상대: ${esc(info.oppName)}${info.ghost ? ' (유령 복제)' : ''} · 전투 시간 ${(B.result.ticks * CFG.TICK).toFixed(1)}초</p>
+    <h3>유닛별 기여</h3>
+    <table class="stats"><tr><th>유닛</th><th>준 피해</th><th style="width:40%"></th><th>받은 피해</th><th>회복</th></tr>
+    ${mine.sort((a, b) => b.dmgDone - a.dmgDone).map(u => `<tr><td>${u.d.emoji} ${u.d.name} ${'★'.repeat(u.star)}</td><td>${Math.round(u.dmgDone)}</td>
+      <td><div class="bar" style="width:${(u.dmgDone / maxD) * 100}%"></div></td><td>${Math.round(u.dmgTaken)}</td><td>${Math.round(u.healDone)}</td></tr>`).join('')}</table>
+    <h3 class="mt">주문 기여</h3>
+    <div style="font-size:13px">시전 ${S.casts}회 · 주문 피해 ${Math.round(S.spellDmg)} · 회복 ${Math.round(S.spellHeal)} · 보호막 ${Math.round(S.spellShield)}
+    ${B.log.filter(l => l.side === 0).map(l => `<span class="pill">${(l.tick * CFG.TICK).toFixed(1)}s ${SPELLS[B.sides[0].spells[l.slot].id].icon}${l.auto ? '(자동)' : ''}</span>`).join(' ')}</div>
+    ${info.rewards ? `<h3 class="mt">보상</h3><div style="font-size:14px">${info.rewards}</div>` : ''}
+    <h3 class="mt">다른 탁자</h3><div style="font-size:13px;line-height:1.6">${info.others.join('<br>') || '-'}</div>
+    <div class="row-btns"><button class="primary" id="rNext">계속 ▶</button></div>`, box => {
+    box.querySelector('#rNext').onclick = () => { closeModal(); done(); };
+  });
+}
+
+function showGameOver(P) {
+  clearSave();
+  const win = P.place === 1;
+  openModal(`<div class="title-hero"><div class="crown">${win ? '👑' : '🪦'}</div>
+    <h1>${win ? '탁자의 주인이 되었습니다!' : `${P.place}위로 탈락`}</h1>
+    <p>${roundLabel()}까지 생존 · 레벨 ${P.level} · 시드 ${G.seed}</p></div>
+    <h3>최종 순위</h3>
+    <div style="font-size:14px;line-height:1.8">${G.players.slice().sort((a, b) => (b.alive - a.alive) || (a.alive ? b.hp - a.hp : a.place - b.place)).map(x => `${x.alive ? (G.players.filter(p => p.alive).length === 1 ? '1위' : `생존 (체력 ${x.hp})`) : x.place + '위'} ${x.emoji} ${esc(x.name)}${x.ai ? ` <small>${esc(x.ai.style)}</small>` : ''}`).join('<br>')}</div>
+    <div class="row-btns"><button id="goTitle">시작 화면</button><button class="primary" id="goNew">같은 설정으로 새 게임</button></div>`, box => {
+    box.querySelector('#goTitle').onclick = showTitle;
+    box.querySelector('#goNew').onclick = () => { const o = { lordType: human().lordType, difficulty: G.difficulty, seed: 0 }; closeModal(); startNewGame(o); };
+  });
+}
+
+/* ===== 11-flow.js ===== */
+/* =====================================================================
+ * 11. 진행 — 라운드 흐름, 전투 재생 루프, 공용 선택, 보상, 탈락
+ * ===================================================================== */
+
+function startNewGame(opts) {
+  stopBattle();
+  newGame(opts);
+  clearSave();
+  beginRound();
+}
+function continueGame(saved) {
+  stopBattle();
+  G = saved;
+  beginRound();
+}
+function stopBattle() {
+  UI.battle = null; UI.battleView = false; UI.aim = null; UI.pending = null; UI.currentOppId = null;
+  FX.floats = []; FX.projs = []; FX.flashes = []; FX.texts = [];
+  $('#aimHint').textContent = '';
+}
+
+function beginRound() {
+  stopBattle();
+  if (!G || G.over) return;
+  const type = roundType(G.stage, G.round);
+  if (type === 'carousel') { G.phase = 'carousel'; renderAll(); return runCarousel(); }
+  G.phase = 'prep';
+  startPrep();
+  const ready = () => { G.phase = 'prep'; renderAll(); toast(`${roundLabel()} 준비 단계 — ${type === 'pve' ? '중립 몬스터' : '대전'}`); };
+  if (augmentDue()) {
+    for (const P of G.players) if (P.alive && !P.isHuman) applyAugment(P, aiPickAugment(P, augmentOffers(P)));
+    G.phase = 'augment';
+    renderAll();
+    showAugmentPick(augmentOffers(human()), a => { applyAugment(human(), a); ready(); });
+  } else ready();
+}
+
+function onReady() {
+  if (!G || G.phase !== 'prep' || modalOpen()) return;
+  const P = human();
+  while (P.board.length > boardLimit(P)) {
+    const u = P.board.pop();
+    const f = benchFree(P);
+    if (f >= 0) P.bench[f] = u; else sellUnit(P, u);
+  }
+  for (const A of G.players) if (A.alive && !A.isHuman) aiPrep(A);
+  const type = roundType(G.stage, G.round);
+  const seedBase = R().int(2 ** 30);
+  const battles = [];
+  if (type === 'pve') for (const A of G.players) { if (A.alive) battles.push({ a: A, b: null, pve: true }); }
+  else for (const [a, b, ghost] of makePairs()) battles.push({ a, b, ghost: !!ghost });
+  for (const bt of battles) if (bt.b && bt.b.isHuman && !bt.ghost) [bt.a, bt.b] = [bt.b, bt.a];
+  battles.forEach((bt, i) => { bt.seed = seedBase + i * 7919; });
+  const mb = battles.find(bt => bt.a.isHuman);
+  for (const bt of battles) if (bt !== mb) bt.B = runBattle(specOf(bt.a), bt.b ? specOf(bt.b) : monsterSpec(), bt.seed);
+  G.phase = 'battle';
+  UI.pending = { battles, type, mb };
+  UI.currentOppId = mb.b ? mb.b.id : null;
+  const oppSpec = mb.b ? specOf(mb.b) : monsterSpec();
+  if (G.instant) {
+    mb.B = runBattle(specOf(P, { forceAuto: true }), oppSpec, mb.seed);
+    renderAll();
+    finishRound();
+    return;
+  }
+  mb.B = UI.battle = createBattle(specOf(P), oppSpec, mb.seed);
+  UI.battleView = true; UI.acc = 0; UI.ending = false;
+  pushEffects(UI.battle, UI.battle.ev); UI.battle.ev = [];
+  renderAll();
+  renderTraitsBattle();
+}
+
+// 전투 중에는 시너지 패널에 실제 발동 단계 표시 (스냅샷)
+function renderTraitsBattle() { renderTraits(); }
+
+/* ---------- 재생 루프 ---------- */
+let lastBarUpdate = 0;
+function frame(now) {
+  const dt = Math.min(0.05, ((now - UI.lastFrame) / 1000) || 0.016);
+  UI.lastFrame = now; UI.frameDt = dt;
+  const B = UI.battle;
+  if (B && UI.battleView && !B.over && !modalOpen()) {
+    UI.acc += dt * G.battleSpeed * (UI.aim ? 0.25 : 1);
+    let steps = 0;
+    while (UI.acc >= CFG.TICK && steps < 12 && !B.over) {
+      UI.acc -= CFG.TICK; steps++;
+      stepBattle(B);
+      pushEffects(B, B.ev); B.ev = [];
+    }
+    if (UI.aim && !spellReady(B.sides[0], UI.aim.slot) && !UI.aim.first) cancelAim();
+  }
+  if (B && B.over && UI.battleView && !UI.ending) {
+    UI.ending = true; cancelAim();
+    const w = B.result.winner;
+    toast(w === 0 ? '승리!' : B.result.timeout ? '시간 초과' : '패배', w === 0 ? 'gold' : 'bad');
+    setTimeout(finishRound, 1100);
+  }
+  if (G) draw(now);
+  if (G && UI.battleView && now - lastBarUpdate > 90) { lastBarUpdate = now; renderSpellBar(); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 라운드 종료 ---------- */
+function pveRewards(P, won) {
+  const r = R(), got = [];
+  const comps = G.stage === 1 ? 1 : won ? 2 : 1;
+  const gold = won ? (G.stage === 1 ? 1 : 3) : 0;
+  for (let i = 0; i < comps; i++) { const it = r.pick(COMP_KEYS); P.items.push(it); got.push(COMPONENTS[it].icon + ' ' + COMPONENTS[it].name); }
+  if (gold) { P.gold += gold; got.push(`🪙 ${gold}`); }
+  const spellReward = (G.stage === 1 && G.round === 3) || (G.stage >= 2 && won);
+  if (spellReward) {
+    if (P.isHuman) G.pendingSpellPick = true;
+    else { const ids = spellOffers(P, 3); if (ids.length) addSpell(P, aiPickSpell(P, ids)); }
+    got.push('📜 새 주문');
+  }
+  return got.join(' · ');
+}
+
+function finishRound() {
+  if (!UI.pending) return;
+  const { battles, mb } = UI.pending;
+  const base = stageBaseDamage(G.stage);
+  const others = [];
+  let info = null;
+  for (const bt of battles) {
+    const res = bt.B.result;
+    if (bt.pve) {
+      const won = res.winner === 0;
+      const dmg = won ? 0 : Math.max(1, base + survivorDamage(res.survivors[1]));
+      applyResult(bt.a, won, dmg, false, '중립 몬스터');
+      const rw = pveRewards(bt.a, won);
+      if (bt === mb) info = { won, dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw };
+    } else {
+      const w = res.winner;
+      const draw = res.timeout || w === -1;
+      const dA = draw ? Math.max(1, base) : base + survivorDamage(res.survivors[1]);
+      const dB = draw ? Math.max(1, base) : base + survivorDamage(res.survivors[0]);
+      applyResult(bt.a, w === 0, dA, true, bt.b.name);
+      if (!bt.ghost) applyResult(bt.b, w === 1, dB, true, bt.a.name);
+      if (bt === mb) info = { won: w === 0, dmg: dA, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost };
+      else {
+        const tag = draw ? '무승부' : `${(w === 0 ? bt.a : bt.b).emoji} 승`;
+        others.push(`${bt.a.emoji} ${esc(bt.a.name)} vs ${bt.b.emoji} ${esc(bt.b.name)}${bt.ghost ? '(유령)' : ''} → ${tag}`);
+      }
+    }
+  }
+  if (battles[0].pve) others.push(...battles.filter(bt => bt !== mb).map(bt => `${bt.a.emoji} ${esc(bt.a.name)} → ${bt.B.result.winner === 0 ? '몬스터 처치' : '몬스터에게 패배'}`));
+  info.B = mb.B; info.others = others;
+  G.phase = 'result';
+  renderAll();
+  const H = human();
+  const proceed = () => {
+    const out = processEliminations();
+    for (const P of out) toast(`${P.emoji} ${P.name} 탈락 (${P.place}위)`, 'bad');
+    const alive = G.players.filter(p => p.alive);
+    if (!H.alive || alive.length <= 1) {
+      G.over = true; G.phase = 'over';
+      stopBattle(); renderAll(); showGameOver(H);
+      return;
+    }
+    advanceRound();
+    saveGame();
+    beginRound();
+  };
+  showBattleResult(info, () => {
+    if (G.pendingSpellPick) {
+      G.pendingSpellPick = false;
+      showSpellPick(spellOffers(H, 3), id => { if (id) { addSpell(H, id); toast(`${SPELLS[id].icon} ${SPELLS[id].name} 획득`, 'gold'); } proceed(); });
+    } else proceed();
+  });
+}
+
+/* ---------- 공용 선택 라운드 ---------- */
+function runCarousel() {
+  const r = R();
+  const alive = G.players.filter(P => P.alive);
+  const n = alive.length + 1;
+  const costs = G.stage <= 2 ? [1, 2] : G.stage === 3 ? [2, 3] : G.stage === 4 ? [3, 4] : [4, 5];
+  const nSpells = Math.min(2, Math.floor(n / 3));
+  const options = [];
+  for (let i = 0; i < n - nSpells; i++) {
+    const cost = r.pick(costs);
+    const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === cost && G.pool[k] > 0);
+    if (!ids.length) continue;
+    options.push({ kind: 'unit', defId: r.pick(ids), item: r.pick(COMP_KEYS) });
+  }
+  for (const id of r.shuffle(SPELL_KEYS.slice()).slice(0, nSpells)) options.push({ kind: 'spell', id });
+  r.shuffle(options);
+  const order = r.shuffle(alive.slice()).sort((a, b) => a.hp - b.hp);
+  let idx = 0;
+  const take = (P, i) => {
+    const o = options[i];
+    o.taken = P;
+    if (o.kind === 'unit') {
+      takeFromPool(o.defId, 1);
+      P.items.push(o.item);
+      const f = benchFree(P);
+      if (f >= 0) { P.bench[f] = makeUnit(o.defId, 1); checkMerge(P); }
+      else { P.gold += UNITS[o.defId].cost; G.pool[o.defId]++; }
+    } else if (!addSpell(P, o.id)) P.gold += 2;
+  };
+  const render = () => {
+    const cur = order[idx];
+    openModal(`<h2>🎠 공용 선택</h2><p class="sub">체력이 낮은 군주부터 하나씩 고릅니다. ${cur ? (cur.isHuman ? '<b style="color:var(--gold)">당신의 차례입니다!</b>' : `${cur.emoji} ${esc(cur.name)} 고르는 중…`) : ''}</p>
+      <div class="queue">${order.map((P, i) => `<span class="${i < idx ? 'done' : i === idx ? 'now' : ''}" title="${esc(P.name)} (${P.hp})">${P.emoji}</span>`).join('')}</div>
+      <div class="carousel">${options.map((o, i) => {
+        const tk = o.taken ? `<div class="taken-by">${o.taken.emoji} 선택</div>` : '';
+        if (o.kind === 'unit') {
+          const d = UNITS[o.defId], it = COMPONENTS[o.item];
+          return `<div class="choice ${o.taken ? 'disabled' : ''}" data-c="${i}" style="border-color:${COST_COLOR[d.cost]}" data-tip="unit:${o.defId}:1">
+            <div class="ci">${d.emoji}</div><div class="cn">${d.name}</div><div class="cd">${d.cost}코스트 · ${it.icon} ${it.name}</div>${tk}</div>`;
+        }
+        const sp = SPELLS[o.id];
+        return `<div class="choice spellc ${o.taken ? 'disabled' : ''}" data-c="${i}" data-tip="spell:${o.id}:1"><div class="ci">${sp.icon}</div><div class="cn">${sp.name}</div><div class="cd">주문 · 마나 ${sp.cost}</div>${tk}</div>`;
+      }).join('')}</div>`, box => {
+      box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => {
+        const i = +el.dataset.c;
+        if (!order[idx] || !order[idx].isHuman || options[i].taken) return;
+        take(order[idx], i); idx++; render(); renderAll(); setTimeout(step, 350);
+      });
+    });
+  };
+  const step = () => {
+    if (idx >= order.length) {
+      setTimeout(() => { closeModal(); advanceRound(); saveGame(); beginRound(); }, 700);
+      return;
+    }
+    const cur = order[idx];
+    render();
+    if (cur.isHuman) return;
+    setTimeout(() => { take(cur, aiCarouselPick(cur, options)); idx++; render(); step(); }, 420);
+  };
+  step();
+}
+
+/* ===== 12-input.js ===== */
+/* =====================================================================
+ * 12. 입력 — 끌어놓기, 클릭, 주문 조준(감속), 키보드
+ * ===================================================================== */
+
+function canvasPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  return [(e.clientX - rect.left) * VIEW.W / rect.width, (e.clientY - rect.top) * VIEW.H / rect.height];
+}
+function hitTest(x, y) {
+  if (x < 0 || x >= VIEW.W || y < 0) return null;
+  if (y < VIEW.BOARD_H) return { kind: 'board', r: Math.floor(y / VIEW.CELL), c: Math.floor(x / VIEW.CELL) };
+  if (y >= VIEW.BENCH_Y && y < VIEW.H) return { kind: 'bench', i: clamp(Math.floor(x / VIEW.BENCH_W), 0, CFG.BENCH - 1) };
+  return null;
+}
+function overEl(e, el) {
+  const r = el.getBoundingClientRect();
+  return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+}
+// 준비 화면에서 칸에 있는 플레이어 유닛
+function unitAt(h) {
+  const P = human();
+  if (!h) return null;
+  if (h.kind === 'bench') return P.bench[h.i];
+  if (h.r < 4) return null;
+  return P.board.find(u => u.r === h.r - 4 && u.c === h.c) || null;
+}
+const boardEditable = () => G && G.phase === 'prep' && !UI.battleView;
+
+/* ---------- 끌어놓기 ---------- */
+function beginDrag(e, payload, icon) {
+  UI.drag = payload;
+  const d = $('#drag');
+  d.textContent = icon; d.classList.remove('hidden');
+  d.style.left = e.clientX + 'px'; d.style.top = e.clientY + 'px';
+  if (payload.unit) $('#sellZone').classList.add('active');
+  hideTip();
+}
+function endDrag() {
+  UI.drag = null;
+  $('#drag').classList.add('hidden');
+  $('#sellZone').classList.remove('active');
+}
+
+canvas.addEventListener('pointerdown', e => {
+  if (!G || modalOpen()) return;
+  const [x, y] = canvasPoint(e);
+  const h = hitTest(x, y);
+  if (UI.battleView && UI.battle) {
+    if (e.button === 2) { cancelAim(); return; }
+    if (UI.aim) { aimClick(h); return; }
+  }
+  if (e.button !== 0) return;
+  const u = unitAt(h);
+  if (!u) return;
+  if (h.kind === 'board' && !boardEditable()) return;
+  canvas.setPointerCapture(e.pointerId);
+  beginDrag(e, { unit: u, from: h }, UNITS[u.defId].emoji);
+});
+
+window.addEventListener('pointermove', e => {
+  if (UI.drag) { const d = $('#drag'); d.style.left = e.clientX + 'px'; d.style.top = e.clientY + 'px'; }
+  if (!G) return;
+  const [x, y] = canvasPoint(e);
+  const h = (e.target === canvas || UI.drag) ? hitTest(x, y) : null;
+  UI.hover = h;
+  if (UI.aim && UI.battle) {
+    if (h && h.kind === 'board') {
+      const occ = UI.battle.occ[h.r][h.c];
+      UI.aimHover = { r: h.r, c: h.c, uid: occ || null };
+    }
+    return;
+  }
+  if (UI.drag || e.target !== canvas) return;
+  // 캔버스 툴팁
+  let html = null;
+  if (UI.battleView && UI.battle && h && h.kind === 'board') {
+    const bu = UI.battle.units.find(u => (u.alive || u.ghost > 0) && Math.hypot((u.sx || 0) - x, (u.sy || 0) - y) < 26);
+    if (bu) html = unitTooltip(bu.defId, bu.star, null, bu);
+  }
+  if (!html) { const u = unitAt(h); if (u && !(UI.battleView && h.kind === 'board')) html = unitTooltip(u.defId, u.star, u); }
+  if (html) showTip(html, e.clientX, e.clientY); else hideTip();
+});
+canvas.addEventListener('pointerleave', () => { if (!UI.drag) { hideTip(); UI.hover = null; } });
+canvas.addEventListener('contextmenu', e => { e.preventDefault(); cancelAim(); });
+
+window.addEventListener('pointerup', e => {
+  if (!UI.drag || !G) return;
+  const drag = UI.drag;
+  endDrag();
+  const P = human();
+  if (drag.unit) {
+    if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
+      if (P.board.includes(drag.unit) && !boardEditable()) return;
+      sellUnit(P, drag.unit); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
+    }
+    const [x, y] = canvasPoint(e);
+    const h = hitTest(x, y);
+    if (h) moveUnit(P, drag.unit, drag.from, h);
+    renderAll();
+    return;
+  }
+  if (drag.item != null) {
+    const [x, y] = canvasPoint(e);
+    const h = hitTest(x, y);
+    const u = unitAt(h);
+    if (!u) return;
+    if (h.kind === 'board' && !boardEditable()) { toast('전투 중에는 보드 유닛에 장착할 수 없습니다', 'bad'); return; }
+    const it = P.items[drag.item];
+    if (equipItem(u, it)) { P.items.splice(drag.item, 1); toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
+    else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
+    renderAll();
+  }
+});
+
+function moveUnit(P, u, from, to) {
+  const onBoard = P.board.includes(u);
+  if (to.kind === 'board') {
+    if (!boardEditable()) return;
+    if (to.r < 4) { toast('아래쪽 4줄에만 배치할 수 있습니다', 'bad'); return; }
+    const lr = to.r - 4, lc = to.c;
+    const other = P.board.find(x => x.r === lr && x.c === lc);
+    if (other === u) return;
+    if (onBoard) {
+      if (other) { other.r = u.r; other.c = u.c; }
+      u.r = lr; u.c = lc;
+    } else {
+      const bi = P.bench.indexOf(u);
+      if (other) { // 대기석 유닛과 보드 유닛 교체
+        P.board.splice(P.board.indexOf(other), 1); P.bench[bi] = other;
+        delete other.r; delete other.c;
+      } else if (P.board.length >= boardLimit(P)) { toast(`보드는 최대 ${boardLimit(P)}명 (레벨을 올리세요)`, 'bad'); return; }
+      else P.bench[bi] = null;
+      u.r = lr; u.c = lc; P.board.push(u);
+    }
+  } else if (to.kind === 'bench') {
+    const other = P.bench[to.i];
+    if (onBoard) {
+      if (!boardEditable()) return;
+      if (other) { // 교체
+        other.r = u.r; other.c = u.c; P.board.push(other);
+      }
+      P.board.splice(P.board.indexOf(u), 1);
+      delete u.r; delete u.c;
+      P.bench[to.i] = u;
+    } else {
+      const bi = P.bench.indexOf(u);
+      P.bench[bi] = other; P.bench[to.i] = u;
+    }
+  }
+}
+
+// 보관함 아이템 끌기
+$('#inventory').addEventListener('pointerdown', e => {
+  const el = e.target.closest('[data-item]');
+  if (!el || !G) return;
+  e.preventDefault();
+  const idx = +el.dataset.item;
+  beginDrag(e, { item: idx }, itemInfo(human().items[idx]).icon);
+});
+
+/* ---------- 상점·버튼 ---------- */
+$('#shop').addEventListener('click', e => {
+  const el = e.target.closest('[data-shop]');
+  if (!el || !G || !human().alive || G.phase === 'over') return;
+  const P = human();
+  const id = P.shop[+el.dataset.shop];
+  if (!buyUnit(P, +el.dataset.shop)) {
+    if (id && P.gold < UNITS[id].cost) toast('골드가 부족합니다', 'bad');
+    else if (id) toast('대기석이 가득 찼습니다', 'bad');
+  }
+  renderAll();
+});
+$('#btnXp').onclick = () => { if (G && G.phase === 'prep' && buyXp(human())) renderAll(); };
+$('#btnRoll').onclick = () => { if (G && G.phase !== 'over' && reroll(human())) renderAll(); };
+$('#btnReady').onclick = onReady;
+$('#btnSpellbook').onclick = () => G && showSpellbook();
+$('#btnHelp').onclick = () => showHelp();
+$('#btnMenu').onclick = () => G && showMenu();
+$('#btnSpeed').onclick = cycleSpeed;
+function cycleSpeed() {
+  if (!G) return;
+  if (G.instant) { G.instant = false; G.battleSpeed = 1; }
+  else if (G.battleSpeed === 1) G.battleSpeed = 2;
+  else G.instant = true;
+  // 즉시 결과로 바꾸면 진행 중 전투도 자동 시전으로 즉시 마무리
+  if (G.instant && UI.battle && UI.battleView && !UI.battle.over) {
+    UI.battle.sides[0].forceAuto = true;
+    UI.battle.headless = true;
+    cancelAim();
+    let guard = 0;
+    while (!UI.battle.over && guard++ < 1000) stepBattle(UI.battle);
+    UI.battle.ev = [];
+  }
+  renderTop();
+}
+$('#players').addEventListener('click', e => { const el = e.target.closest('[data-player]'); if (el) showPlayer(+el.dataset.player); });
+$('#spellCards').addEventListener('click', e => {
+  const el = e.target.closest('[data-spell]');
+  if (!el || !G) return;
+  if (UI.battleView && UI.battle && !UI.battle.over) startAim(+el.dataset.spell);
+  else showSpellbook();
+});
+
+/* ---------- 툴팁 (DOM) ---------- */
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el || UI.drag) return;
+  showTip(tipFor(el.dataset.tip), e.clientX, e.clientY);
+});
+document.addEventListener('mousemove', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (el && !UI.drag) showTip(tipFor(el.dataset.tip), e.clientX, e.clientY);
+});
+document.addEventListener('mouseout', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (el && !(e.relatedTarget && el.contains(e.relatedTarget))) hideTip();
+});
+
+/* ---------- 주문 조준 ---------- */
+function startAim(i) {
+  const B = UI.battle;
+  if (!B || B.over) return;
+  const S = B.sides[0];
+  const sl = S.spells[i];
+  if (!sl) return;
+  if (!spellReady(S, i)) {
+    toast(sl.used ? '이미 사용한 주문입니다' : sl.cd > 0 ? `재사용 대기 ${sl.cd.toFixed(1)}초` : `군주 마나 부족 (${spellCostNow(S, sl)} 필요)`, 'bad');
+    return;
+  }
+  const sp = SPELLS[sl.id];
+  if (sp.target === 'none') { queueSpell(B, 0, i, {}); cancelAim(); return; }
+  UI.aim = { slot: i, first: null };
+  UI.aimHover = null; UI.tabIdx = -1;
+  updateAimHint();
+  renderSpellBar();
+}
+function cancelAim() {
+  UI.aim = null; UI.aimHover = null;
+  $('#aimHint').textContent = '';
+}
+function updateAimHint() {
+  if (!UI.aim) { $('#aimHint').textContent = ''; return; }
+  const sp = SPELLS[UI.battle.sides[0].spells[UI.aim.slot].id];
+  const t = {
+    ally: '아군 유닛을 선택', enemy: '적 유닛을 선택', row: '가로 줄을 선택', cell: '범위 중심 칸을 선택',
+    ally2: UI.aim.first ? '맞바꿀 두 번째 아군 선택' : '첫 번째 아군 선택', allyCell: UI.aim.first ? '이동할 빈 칸 선택' : '이동시킬 아군 선택',
+  }[sp.target];
+  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (0.25배속 · Tab 순환 · Enter 시전 · Esc 취소)`;
+}
+function aimClick(h) {
+  if (!h || h.kind !== 'board') return;
+  const B = UI.battle;
+  const occ = B.occ[h.r][h.c];
+  UI.aimHover = { r: h.r, c: h.c, uid: occ || null };
+  confirmAim();
+}
+function confirmAim() {
+  const B = UI.battle, a = UI.aim, hv = UI.aimHover;
+  if (!B || !a || !hv) return;
+  const S = B.sides[0];
+  const sp = SPELLS[S.spells[a.slot].id];
+  const u = hv.uid ? unitByUid(B, hv.uid) : null;
+  const ally = u && u.side === 0 && targetable(u), foe = u && u.side === 1 && targetable(u);
+  let target = null;
+  switch (sp.target) {
+    case 'ally': if (ally) target = { uid: u.uid }; break;
+    case 'enemy': if (foe) target = { uid: u.uid }; break;
+    case 'row': target = { r: hv.r }; break;
+    case 'cell': target = { r: hv.r, c: hv.c }; break;
+    case 'ally2':
+      if (!ally) break;
+      if (!a.first) { a.first = u.uid; updateAimHint(); return; }
+      if (u.uid !== a.first) target = { uid: a.first, uid2: u.uid };
+      break;
+    case 'allyCell':
+      if (!a.first) { if (ally) { a.first = u.uid; updateAimHint(); } return; }
+      if (!B.occ[hv.r][hv.c]) target = { uid: a.first, r: hv.r, c: hv.c };
+      break;
+  }
+  if (!target) { toast('올바른 대상이 아닙니다', 'bad'); return; }
+  queueSpell(B, 0, a.slot, target);
+  cancelAim();
+}
+// Tab: 유효한 대상을 순환
+function aimCandidates() {
+  const B = UI.battle, a = UI.aim;
+  const sp = SPELLS[B.sides[0].spells[a.slot].id];
+  const allies = B.units.filter(u => u.side === 0 && targetable(u)), foes = B.units.filter(u => u.side === 1 && targetable(u));
+  const asHover = u => ({ r: u.r, c: u.c, uid: u.uid });
+  switch (sp.target) {
+    case 'ally': return allies.map(asHover);
+    case 'enemy': case 'cell': return foes.map(asHover);
+    case 'row': return [...new Set(foes.map(u => u.r))].map(r => ({ r, c: 3, uid: null }));
+    case 'ally2': return allies.filter(u => u.uid !== a.first).map(asHover);
+    case 'allyCell': {
+      if (!a.first) return allies.map(asHover);
+      const c = [];
+      for (let r = 4; r < GROWS; r++) for (let cc = 0; cc < GCOLS; cc++) if (!B.occ[r][cc]) c.push({ r, c: cc, uid: null });
+      return c;
+    }
+  }
+  return [];
+}
+
+/* ---------- 키보드 ---------- */
+window.addEventListener('keydown', e => {
+  if (!G) return;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+  const k = e.key.toLowerCase();
+  if (modalOpen()) {
+    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume'); if (b) b.click(); }
+    return;
+  }
+  if (UI.aim) {
+    if (k === 'escape') { cancelAim(); e.preventDefault(); return; }
+    if (k === 'tab') {
+      e.preventDefault();
+      const list = aimCandidates();
+      if (!list.length) return;
+      UI.tabIdx = (UI.tabIdx + (e.shiftKey ? -1 : 1) + list.length) % list.length;
+      UI.aimHover = list[UI.tabIdx];
+      return;
+    }
+    if (k === 'enter') { e.preventDefault(); confirmAim(); return; }
+  }
+  if (['1', '2', '3', '4'].includes(k) && UI.battleView) { startAim(+k - 1); return; }
+  if (k === 'd') $('#btnRoll').click();
+  else if (k === 'f') $('#btnXp').click();
+  else if (k === ' ') { e.preventDefault(); onReady(); }
+  else if (k === 'b') showSpellbook();
+  else if (k === 's') cycleSpeed();
+  else if (k === 'h') showHelp();
+  else if (k === 'e') {
+    const u = unitAt(UI.hover);
+    if (u && (!human().board.includes(u) || boardEditable())) { sellUnit(human(), u); toast(`판매 +${sellPrice(u)}🪙`); hideTip(); renderAll(); }
+  }
+});
+
+/* ===== 13-sim.js ===== */
+/* =====================================================================
+ * 13. 밸런스 시뮬레이션 — 무작위 보드끼리 화면 없이 수백 판을 돌려
+ *     시너지별·주문별 승률과 '주문 유무에 따른 승률 차이'를 측정한다.
+ * ===================================================================== */
+
+function simRandomBoard(rng, level) {
+  const focus = [rng.pick(TRAIT_KEYS), rng.pick(TRAIT_KEYS)];
+  const ids = Object.keys(UNITS);
+  const chosen = [];
+  let guard = 0;
+  while (chosen.length < level && guard++ < 500) {
+    const cost = rng.weighted(SHOP_ODDS[level]) + 1;
+    let cand = ids.filter(id => UNITS[id].cost === cost && !chosen.some(u => u.defId === id));
+    if (rng.chance(0.65)) {
+      const f = cand.filter(id => UNITS[id].traits.some(t => focus.includes(t)));
+      if (f.length) cand = f;
+    }
+    if (!cand.length) continue;
+    chosen.push({ uid: 0, defId: rng.pick(cand), star: rng.chance(0.4) ? 2 : 1, items: [] });
+  }
+  // 핵심 유닛에게 무작위 완성 아이템 2개
+  const carry = chosen.slice().sort((a, b) => UNITS[b.defId].cost - UNITS[a.defId].cost)[0];
+  for (let i = 0; i < 2; i++) carry.items.push(itemKey(rng.pick(COMP_KEYS), rng.pick(COMP_KEYS)));
+  const P = { board: [], aug: [], ai: { focus } };
+  placeFormation(P, chosen);
+  return P;
+}
+function simSpec(P, spells, lordType) {
+  return {
+    name: '시뮬', emoji: '🤖', units: P.board.map(u => ({ defId: u.defId, star: u.star, items: u.items, r: u.r, c: u.c })),
+    traits: computeTraits(P.board, []), aug: [], lordType, spells,
+    ai: spells.length ? { tend: 0.5, castDelay: 0, mult: CFG.AUTO_CAST_MULT } : null,
+  };
+}
+function simSpells(rng) {
+  const ids = rng.shuffle(SPELL_KEYS.slice());
+  const out = [];
+  for (const id of ids) {
+    if (out.length >= 2) break;
+    if (SPELLS[id].once && out.some(s => SPELLS[s.id].once)) continue;
+    out.push({ id, lvl: 1 + rng.int(2) });
+  }
+  return out;
+}
+
+function runSimulation(n, onProgress, onDone) {
+  const rng = new RNG(20261003);
+  const traits = {}, spells = {};
+  let noSpell = 0, withSpell = 0, i = 0, timeouts = 0;
+  const rec = (map, k, win) => { const s = map[k] || (map[k] = { g: 0, w: 0 }); s.g++; if (win) s.w++; };
+  const chunk = () => {
+    const end = Math.min(n, i + 8);
+    for (; i < end; i++) {
+      const A = simRandomBoard(rng, 7), Bd = simRandomBoard(rng, 7);
+      const sA = simSpells(rng), sB = simSpells(rng);
+      const lA = rng.pick(['war', 'guard', 'tactic']), lB = rng.pick(['war', 'guard', 'tactic']);
+      const seed = rng.int(2 ** 30);
+      const r0 = runBattle(simSpec(A, [], lA), simSpec(Bd, [], lB), seed).result;
+      const r1 = runBattle(simSpec(A, sA, lA), simSpec(Bd, [], lB), seed).result;
+      const r2 = runBattle(simSpec(A, sA, lA), simSpec(Bd, sB, lB), seed).result;
+      if (r0.winner === 0) noSpell++;
+      if (r1.winner === 0) withSpell++;
+      if (r2.timeout) timeouts++;
+      for (const [P, side] of [[A, 0], [Bd, 1]]) {
+        const c = computeTraits(P.board, []);
+        for (const t of TRAIT_KEYS) if (traitTier(t, c[t] || 0)) rec(traits, t, r2.winner === side);
+      }
+      for (const s of sA) rec(spells, s.id, r2.winner === 0);
+      for (const s of sB) rec(spells, s.id, r2.winner === 1);
+    }
+    onProgress(i / n);
+    if (i < n) setTimeout(chunk, 0);
+    else onDone({ n, traits, spells, noSpell: noSpell / n, withSpell: withSpell / n, timeouts: timeouts / n });
+  };
+  chunk();
+}
+
+function showSimulation(back) {
+  openModal(`<h2>📊 밸런스 시뮬레이션</h2>
+    <p class="sub">레벨 7 무작위 보드끼리 화면 없이 전투를 돌립니다. 같은 보드·같은 시드에서 '주문 없음' 대 '한쪽만 주문 사용'을 비교해 주문의 영향력(목표 15~25%p)을 측정합니다.</p>
+    <div class="field"><label>전투 수</label><select id="simN"><option>60</option><option selected>150</option><option>300</option></select>
+    <button class="primary" id="simGo">실행</button><span id="simProg" class="pill">대기</span></div>
+    <div id="simOut"></div>
+    <div class="row-btns"><button id="simBack">닫기</button></div>`, box => {
+    box.querySelector('#simBack').onclick = () => (back ? back() : closeModal());
+    box.querySelector('#simGo').onclick = () => {
+      const n = +box.querySelector('#simN').value;
+      box.querySelector('#simGo').disabled = true;
+      runSimulation(n, p => { box.querySelector('#simProg').textContent = Math.round(p * 100) + '%'; }, res => {
+        box.querySelector('#simGo').disabled = false;
+        const row = (name, s) => `<tr><td>${name}</td><td>${s.g}</td><td>${Math.round(s.w / s.g * 100)}%</td><td style="width:40%"><div class="bar" style="width:${s.w / s.g * 100}%"></div></td></tr>`;
+        const diff = Math.round((res.withSpell - res.noSpell) * 100);
+        box.querySelector('#simOut').innerHTML = `
+          <h3>주문 영향력</h3><div style="font-size:14px">A 진영 승률: 주문 없음 <b>${Math.round(res.noSpell * 100)}%</b> → 주문 사용 <b>${Math.round(res.withSpell * 100)}%</b>
+          (차이 <b style="color:${diff >= 15 && diff <= 25 ? 'var(--green)' : 'var(--gold)'}">${diff >= 0 ? '+' : ''}${diff}%p</b>, 목표 +15~25%p) · 시간 초과 ${Math.round(res.timeouts * 100)}%</div>
+          <h3 class="mt">시너지별 승률 (발동 시)</h3><table class="stats"><tr><th>시너지</th><th>판</th><th>승률</th><th></th></tr>
+          ${Object.entries(res.traits).sort((a, b) => b[1].w / b[1].g - a[1].w / a[1].g).map(([t, s]) => row(TRAITS[t].icon + ' ' + TRAITS[t].name, s)).join('')}</table>
+          <h3 class="mt">주문별 승률 (양쪽 주문 사용)</h3><table class="stats"><tr><th>주문</th><th>판</th><th>승률</th><th></th></tr>
+          ${Object.entries(res.spells).sort((a, b) => b[1].w / b[1].g - a[1].w / a[1].g).map(([id, s]) => row(SPELLS[id].icon + ' ' + SPELLS[id].name, s)).join('')}</table>`;
+      });
+    };
+  });
+}
+
+/* =====================================================================
+ * 14. 시작
+ * ===================================================================== */
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+requestAnimationFrame(frame);
+showTitle();
+
+</script>
+</body>
+</html>
