@@ -19,6 +19,7 @@ function resizeCanvas() {
 // 전투 연출 상태
 const FX = { floats: [], projs: [], flashes: [], texts: [], shake: 0 };
 const UI = {
+  mySide: 0, flip: false, // 지금 보는 전투에서 내가 속한 진영
   hover: null,          // {kind:'board'|'bench', r, c, i}
   drag: null,           // {unit, from, x, y} 또는 {item, idx}
   aim: null,            // {slot, step, first}
@@ -28,7 +29,11 @@ const UI = {
   lastFrame: 0, acc: 0,
 };
 
-function cellCenter(r, c) { return [c * VIEW.CELL + VIEW.CELL / 2, r * VIEW.CELL + VIEW.CELL / 2]; }
+// 전투 화면에서 위쪽 진영(side 1)의 플레이어는 보드를 180도 돌려서 본다 → 항상 내 유닛이 아래
+const flipped = () => UI.flip && UI.battleView;
+const vr = r => (flipped() ? GROWS - 1 - r : r);
+const vc = c => (flipped() ? GCOLS - 1 - c : c);
+function cellCenter(r, c) { return [vc(c) * VIEW.CELL + VIEW.CELL / 2, vr(r) * VIEW.CELL + VIEW.CELL / 2]; }
 function benchCenter(i) { return [i * VIEW.BENCH_W + VIEW.BENCH_W / 2, VIEW.BENCH_Y + VIEW.BENCH_H / 2]; }
 
 function unitScreenPos(u) {
@@ -124,7 +129,7 @@ function drawUnitToken(x, y, rad, u, o = {}) {
   ctx.save();
   if (o.alpha != null) ctx.globalAlpha = o.alpha;
   ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
-  ctx.fillStyle = o.side === 1 ? '#3a1d1d' : '#1d2a3a';
+  ctx.fillStyle = o.side === 1 ? '#3a1d1d' : '#1d2a3a'; // side: 0 = 아군, 1 = 적군
   ctx.fill();
   ctx.lineWidth = o.small ? 2.5 : 3.5; ctx.strokeStyle = col; ctx.stroke();
   if (o.side === 1) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#ff5f5f'; ctx.beginPath(); ctx.arc(x, y, rad + 3, 0, Math.PI * 2); ctx.stroke(); }
@@ -151,9 +156,9 @@ function drawBattle(B) {
   // 화염 지대
   for (const z of B.zones) {
     ctx.fillStyle = `rgba(255,90,30,${0.18 + 0.08 * Math.sin(performance.now() / 120)})`;
-    ctx.fillRect(0, z.row * VIEW.CELL, VIEW.W, VIEW.CELL);
+    ctx.fillRect(0, vr(z.row) * VIEW.CELL, VIEW.W, VIEW.CELL);
     ctx.font = '14px sans-serif';
-    for (let c = 0; c < GCOLS; c++) ctx.fillText('🔥', c * VIEW.CELL + 12, z.row * VIEW.CELL + 14);
+    for (let c = 0; c < GCOLS; c++) ctx.fillText('🔥', c * VIEW.CELL + 12, vr(z.row) * VIEW.CELL + 14);
   }
   drawAimOverlay(B);
   const list = B.units.filter(u => u.alive || u.ghost > 0 || u.reviving > 0);
@@ -166,7 +171,7 @@ function drawBattle(B) {
     if (u.undying > 0) glow(x, y, 30, '#ffd84a');
     if (u.taunt > 0) glow(x, y, 30, '#ff8f5a');
     if (isAimTarget) glow(x, y, 32, '#f2c14e');
-    drawUnitToken(x, y, 23, u, { side: u.side, alpha });
+    drawUnitToken(x, y, 23, u, { side: u.side === UI.mySide ? 0 : 1, alpha });
     if (u.freeze > 0) { ctx.fillStyle = '#8fd8ff66'; ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI * 2); ctx.fill(); }
     if (u.ghost <= 0 && u.reviving <= 0) drawBars(u, x, y);
     // 상태 아이콘
@@ -189,7 +194,7 @@ function drawBars(u, x, y) {
   const shield = sum(u.shields.map(s => s.amt));
   const tot = Math.max(u.maxHp, u.hp + shield);
   ctx.fillStyle = '#000a'; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
-  ctx.fillStyle = u.side === 0 ? '#59d97a' : '#ff5f5f';
+  ctx.fillStyle = u.side === UI.mySide ? '#59d97a' : '#ff5f5f';
   ctx.fillRect(bx, by, w * (u.hp / tot), h);
   if (shield > 0) { ctx.fillStyle = '#e8f0ff'; ctx.fillRect(bx + w * (u.hp / tot), by, w * (shield / tot), h); }
   // 체력 눈금 (300마다)
@@ -203,22 +208,22 @@ function drawBars(u, x, y) {
 
 function drawAimOverlay(B) {
   if (!UI.aim) return;
-  const S = B.sides[0];
+  const S = B.sides[UI.mySide];
   const sl = S.spells[UI.aim.slot];
   const sp = SPELLS[sl.id];
   const h = UI.aimHover;
   if (sp.target === 'row' && h && h.r != null) {
-    ctx.fillStyle = '#ff7a3044'; ctx.fillRect(0, h.r * VIEW.CELL, VIEW.W, VIEW.CELL);
+    ctx.fillStyle = '#ff7a3044'; ctx.fillRect(0, vr(h.r) * VIEW.CELL, VIEW.W, VIEW.CELL);
   }
   if ((sp.target === 'cell') && h && h.r != null) {
     ctx.fillStyle = '#7cc6ff33';
-    ctx.fillRect((h.c - 1) * VIEW.CELL, (h.r - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
+    ctx.fillRect((vc(h.c) - 1) * VIEW.CELL, (vr(h.r) - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
     ctx.strokeStyle = '#7cc6ff'; ctx.lineWidth = 2;
-    ctx.strokeRect((h.c - 1) * VIEW.CELL, (h.r - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
+    ctx.strokeRect((vc(h.c) - 1) * VIEW.CELL, (vr(h.r) - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
   }
   if (sp.target === 'allyCell' && UI.aim.first && h && h.r != null && !B.occ[h.r][h.c]) {
     ctx.strokeStyle = '#b07cff'; ctx.lineWidth = 2;
-    ctx.strokeRect(h.c * VIEW.CELL + 3, h.r * VIEW.CELL + 3, VIEW.CELL - 6, VIEW.CELL - 6);
+    ctx.strokeRect(vc(h.c) * VIEW.CELL + 3, vr(h.r) * VIEW.CELL + 3, VIEW.CELL - 6, VIEW.CELL - 6);
   }
   if (UI.aim.first) {
     const a = unitByUid(B, UI.aim.first);
@@ -261,7 +266,7 @@ function pushEffects(B, events) {
       }
       case 'spell': showSpellBanner(e); {
         const t = e.target || {};
-        if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === 0 ? '#7cc6ff' : '#ff6b6b' }); }
+        if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === UI.mySide ? '#7cc6ff' : '#ff6b6b' }); }
         if (t.r != null && t.c != null && t.uid == null) { const [x, y] = cellCenter(t.r, t.c); FX.flashes.push({ x, y, t: 0, dur: 0.6, kind: 'burst', color: '#7cc6ff', size: 90 }); }
         if (e.id === 'timestop') FX.shake = 0.3;
         break;
@@ -339,7 +344,7 @@ function drawEffects() {
 
 function showSpellBanner(e) {
   const el = document.createElement('div');
-  el.className = 'spell-banner' + (e.side === 1 ? ' enemy' : '');
+  el.className = 'spell-banner' + (e.side !== UI.mySide ? ' enemy' : '');
   el.textContent = `${e.emoji} ${e.lord} — ${e.icon} ${e.name}${e.auto ? ' (자동)' : ''}`;
   const box = document.getElementById('banner');
   box.appendChild(el);

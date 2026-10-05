@@ -3,6 +3,7 @@
  * ===================================================================== */
 
 function toast(msg, kind) {
+  if (NET.capture) { NET.capture.push([msg, kind]); return; } // 방장이 손님의 행동을 처리하는 중이면 그 손님에게 보낼 알림으로 모아 둔다
   const el = document.createElement('div');
   el.className = 'toast' + (kind ? ' ' + kind : '');
   el.textContent = msg;
@@ -29,14 +30,18 @@ function renderTop() {
   $('#xpFill').style.width = P.level >= 9 ? '100%' : `${(P.xp / need) * 100}%`;
   $('#streakIcon').textContent = P.streak > 0 ? '🔥' : P.streak < 0 ? '🧊' : '➖';
   $('#streakVal').textContent = Math.abs(P.streak);
-  $('#btnSpeed').textContent = G.instant ? '즉시 결과' : `${G.battleSpeed}배속`;
+  $('#btnSpeed').textContent = NET.role !== 'off' ? '실시간' : G.instant ? '즉시 결과' : `${G.battleSpeed}배속`;
+  const tm = $('#timerVal');
+  tm.classList.toggle('hidden', !(G.phase === 'prep' && G.prepLeft > 0));
+  tm.textContent = `⏱ ${G.prepLeft}초`;
   const prep = G.phase === 'prep';
   $('#btnXp').disabled = !prep || P.gold < xpCost(P) || P.level >= 9;
   $('#btnXp').innerHTML = `⬆ 경험치<br><small>${xpCost(P)}🪙</small>`;
   $('#btnRoll').disabled = P.gold < rerollCost(P) || !P.alive || G.phase === 'over';
   $('#btnRoll').innerHTML = `🔄 새로고침<br><small>${rerollCost(P)}🪙</small>`;
-  $('#btnReady').disabled = !prep;
-  $('#btnReady').textContent = prep ? '준비 완료 ▶' : G.phase === 'battle' ? '전투 중…' : '대기 중';
+  $('#btnReady').disabled = !prep || P.ready || !P.alive;
+  const rd = G.readyInfo && NET.role !== 'off' ? ` (${G.readyInfo[0]}/${G.readyInfo[1]})` : '';
+  $('#btnReady').textContent = prep ? (P.ready ? '다른 플레이어 대기 중' + rd : '준비 완료 ▶' + rd) : G.phase === 'battle' ? '전투 중…' : '대기 중';
 }
 
 function renderTraits() {
@@ -74,7 +79,7 @@ function renderAugs() {
 function renderSpellBar() {
   const P = human();
   const B = UI.battleView ? UI.battle : null;
-  const S = B ? B.sides[0] : null;
+  const S = B ? B.sides[UI.mySide] : null;
   const lm = S ? S.lm : (hasAug(P, 'manaHead') ? 3 : 0);
   const lmMax = S ? S.lmMax : (hasAug(P, 'manaVault') ? 14 : CFG.LORD_MANA_MAX);
   $('#lmVal').textContent = Math.floor(lm);
@@ -123,9 +128,9 @@ function renderPlayers() {
   $('#players').innerHTML = list.map(P => {
     const hp = Math.max(0, P.hp);
     const st = P.streak > 1 ? `🔥${P.streak}` : P.streak < -1 ? `🧊${-P.streak}` : '';
-    return `<div class="prow ${P.isHuman ? 'me' : ''} ${P.alive ? '' : 'dead'} ${opp === P.id ? 'opp' : ''}" data-player="${P.id}">
+    return `<div class="prow ${P.id === MY_ID ? 'me' : ''} ${P.alive ? '' : 'dead'} ${opp === P.id ? 'opp' : ''}" data-player="${P.id}">
       <div class="pe">${P.emoji}</div>
-      <div class="pm"><div class="pn">${esc(P.name)} <span class="ps">Lv${P.level} ${LORD_TYPES[P.lordType].icon} ${st}</span></div>
+      <div class="pm"><div class="pn">${esc(P.name)} <span class="ps">${P.isHuman ? '👤' : ''}Lv${P.level} ${LORD_TYPES[P.lordType].icon} ${st}</span></div>
       <div class="ph"><i style="width:${Math.min(100, hp)}%"></i></div></div>
       <div class="pv">${P.alive ? hp : '#' + P.place}</div></div>`;
   }).join('');

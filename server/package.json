@@ -1,0 +1,9 @@
+{
+  "name": "seven-lords-table-server",
+  "version": "1.0.0",
+  "description": "일곱 군주의 탁자 온라인 대결용 방 중계 서버 (WebSocket)",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

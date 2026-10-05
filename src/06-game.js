@@ -4,6 +4,9 @@
  * ===================================================================== */
 
 let G = null;
+let MY_ID = 0; // 이 화면의 주인(플레이어 번호). 온라인 손님은 0이 아니다.
+const HUMAN_EMOJIS = ['🧑‍✈️', '🧙', '🥷', '🧝', '🧛', '🧞', '🧜', '🦸'];
+const DEFAULT_AI = () => ({ p: { econ: .5, level: .5, commit: .6, reroll: .3, spell: .5 }, fav: ['guardian', 'fire'], focus: ['guardian', 'fire'], style: '연결이 끊겨 AI가 대신 플레이하는 군주', rerollLevel: 5 });
 const SAVE_KEY = 'sevenLordsTable.save.v1';
 
 function newGame(opts) {
@@ -16,12 +19,17 @@ function newGame(opts) {
     battleSpeed: 1, instant: false, over: false,
   };
   for (const id in UNITS) G.pool[id] = POOL_SIZE[UNITS[id].cost];
-  // 플레이어
-  G.players.push(makePlayer(0, '나', '🧑‍✈️', opts.lordType, true));
-  // AI 군주 12명 중 7명 무작위, 성향 수치에 소폭 변동
-  const roster = rng.shuffle(LORD_ROSTER.slice()).slice(0, 7);
+  // 사람 플레이어 (혼자 하면 1명, 온라인이면 최대 8명)
+  const humans = opts.humans || [{ name: '나', lordType: opts.lordType }];
+  humans.forEach((h, i) => {
+    const P = makePlayer(i, h.name, HUMAN_EMOJIS[i], h.lordType, true);
+    P.ai = DEFAULT_AI(); // 연결이 끊기면 이 성향으로 AI가 이어받는다
+    G.players.push(P);
+  });
+  // 남는 자리는 AI 군주 (12명 중 무작위), 성향 수치에 소폭 변동
+  const roster = rng.shuffle(LORD_ROSTER.slice()).slice(0, 8 - humans.length);
   roster.forEach((L, i) => {
-    const P = makePlayer(i + 1, L.name, L.emoji, L.type, false);
+    const P = makePlayer(humans.length + i, L.name, L.emoji, L.type, false);
     const p = {};
     for (const k in L.p) p[k] = clamp(L.p[k] + rng.range(-0.12, 0.12), 0, 1);
     P.ai = { p, fav: L.fav.slice(), focus: L.fav.slice(), style: L.style, rerollLevel: rng.pick([4, 5, 6]) };
@@ -62,7 +70,7 @@ function makePlayer(id, name, emoji, lordType, isHuman) {
   };
 }
 function makeUnit(defId, star) { return { uid: G.uidN++, defId, star, items: [] }; }
-const human = () => G.players[0];
+const human = () => G.players[MY_ID];
 const hasAug = (P, id) => P.aug.some(a => a.id === id);
 function boardLimit(P) { return P.level + (hasAug(P, 'bigBoard') ? 1 : 0); }
 function spellSlots(P) { return 2 + (P.level >= 7 ? 1 : 0) + (hasAug(P, 'spellSlot') ? 1 : 0); }
@@ -268,7 +276,7 @@ function applyAugment(P, a) {
     }
     case 'legendCall': grantRandomUnit(P, 4, 1); break;
     case 'freeSpell':
-      if (P.isHuman) G.pendingSpellPick = true;
+      if (P.isHuman) P.pendingSpell = true;
       else { const ids = spellOffers(P, 3); if (ids.length) addSpell(P, aiPickSpell(P, ids)); }
       break;
   }

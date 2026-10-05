@@ -26,6 +26,7 @@ function showTitle() {
     <div class="field"><label>시드</label><input id="seedIn" placeholder="비우면 무작위" inputmode="numeric" style="width:160px"><small>같은 시드 = 같은 판</small></div>
     <div class="row-btns">
       <button id="tSim" class="ghost">📊 밸런스 시뮬레이션</button>
+      <button id="tOnline">🌐 온라인 대결</button>
       <button id="tHelp" class="ghost">도움말</button>
       ${saved && !saved.over ? `<button id="tCont">이어하기 (${saved.stage}-${saved.round})</button>` : ''}
       <button id="tNew" class="primary">새 게임 시작</button>
@@ -44,6 +45,7 @@ function showTitle() {
     const c = box.querySelector('#tCont');
     if (c) c.onclick = () => { closeModal(); continueGame(saved); };
     box.querySelector('#tHelp').onclick = () => showHelp(showTitle);
+    box.querySelector('#tOnline').onclick = showOnlineMenu;
     box.querySelector('#tSim').onclick = () => showSimulation(showTitle);
   });
 }
@@ -71,12 +73,12 @@ function showMenu() {
       <button id="mResume" class="primary">계속하기</button>
       <button id="mHelp">도움말</button>
       <button id="mSim">밸런스 시뮬레이션</button>
-      <button id="mTitle">시작 화면으로 (자동 저장됨)</button>
+      <button id="mTitle">${NET.role === 'off' ? '시작 화면으로 (자동 저장됨)' : '방 나가기'}</button>
     </div>`, box => {
     box.querySelector('#mResume').onclick = closeModal;
     box.querySelector('#mHelp').onclick = () => showHelp(showMenu);
     box.querySelector('#mSim').onclick = () => showSimulation(showMenu);
-    box.querySelector('#mTitle').onclick = () => { if (G.phase === 'prep') saveGame(); stopBattle(); showTitle(); };
+    box.querySelector('#mTitle').onclick = leaveToTitle;
   });
 }
 
@@ -118,9 +120,9 @@ function showSpellbook() {
           <button class="small" data-up="${i}" ${prep && upCost && P.gold >= upCost ? '' : 'disabled'}>${upCost ? `강화 ${upCost}🪙` : '최대'}</button></div></div>`;
       }).join('')}
       <div class="row-btns"><button class="primary" id="sbClose">닫기</button></div>`, box => {
-      box.querySelectorAll('[data-eq]').forEach(el => el.onclick = () => { toggleEquip(P, +el.dataset.eq); render(); renderAll(); });
-      box.querySelectorAll('[data-up]').forEach(el => el.onclick = () => { if (upgradeSpell(P, +el.dataset.up)) toast('주문 강화!', 'gold'); render(); renderAll(); });
-      box.querySelectorAll('[data-rule]').forEach(el => el.onchange = () => { P.spells[+el.dataset.rule].rule = el.value; renderAll(); });
+      box.querySelectorAll('[data-eq]').forEach(el => el.onclick = () => { toggleEquip(P, +el.dataset.eq); if (NET.role === 'guest') netAct('eqSpell', { i: +el.dataset.eq }); render(); renderAll(); });
+      box.querySelectorAll('[data-up]').forEach(el => el.onclick = () => { if (upgradeSpell(P, +el.dataset.up)) toast('주문 강화!', 'gold'); if (NET.role === 'guest') netAct('upSpell', { i: +el.dataset.up }); render(); renderAll(); });
+      box.querySelectorAll('[data-rule]').forEach(el => el.onchange = () => { P.spells[+el.dataset.rule].rule = el.value; if (NET.role === 'guest') netAct('rule', { i: +el.dataset.rule, v: el.value }); renderAll(); });
       box.querySelector('#sbClose').onclick = closeModal;
     });
   };
@@ -153,20 +155,20 @@ function showPlayer(id) {
 }
 
 /* ---------- 전투 결과 ---------- */
+// info는 네트워크로도 전달되므로 순수 데이터만 담는다 (battleInfo 참고)
 function showBattleResult(info, done) {
-  const B = info.B;
-  const mine = B.units.filter(u => u.side === 0 && !u.summon);
+  const mine = info.mine.slice().sort((a, b) => b.dmgDone - a.dmgDone);
   const maxD = Math.max(1, ...mine.map(u => u.dmgDone));
-  const S = B.sides[0].stats;
+  const S = info.stats;
   const head = info.won ? '<div class="result-head win">승리!</div>' : info.timeout ? `<div class="result-head lose">시간 초과 — 양쪽 패배 (-${info.dmg})</div>` : `<div class="result-head lose">패배 (-${info.dmg})</div>`;
-  openModal(`${head}<p class="sub">${roundLabel()} · 상대: ${esc(info.oppName)}${info.ghost ? ' (유령 복제)' : ''} · 전투 시간 ${(B.result.ticks * CFG.TICK).toFixed(1)}초</p>
+  openModal(`${head}<p class="sub">${info.roundLabel} · 상대: ${esc(info.oppName)}${info.ghost ? ' (유령 복제)' : ''} · 전투 시간 ${(info.ticks * CFG.TICK).toFixed(1)}초</p>
     <h3>유닛별 기여</h3>
     <table class="stats"><tr><th>유닛</th><th>준 피해</th><th style="width:40%"></th><th>받은 피해</th><th>회복</th></tr>
-    ${mine.sort((a, b) => b.dmgDone - a.dmgDone).map(u => `<tr><td>${u.d.emoji} ${u.d.name} ${'★'.repeat(u.star)}</td><td>${Math.round(u.dmgDone)}</td>
+    ${mine.map(u => `<tr><td>${u.emoji} ${esc(u.name)} ${'★'.repeat(u.star)}</td><td>${Math.round(u.dmgDone)}</td>
       <td><div class="bar" style="width:${(u.dmgDone / maxD) * 100}%"></div></td><td>${Math.round(u.dmgTaken)}</td><td>${Math.round(u.healDone)}</td></tr>`).join('')}</table>
     <h3 class="mt">주문 기여</h3>
     <div style="font-size:13px">시전 ${S.casts}회 · 주문 피해 ${Math.round(S.spellDmg)} · 회복 ${Math.round(S.spellHeal)} · 보호막 ${Math.round(S.spellShield)}
-    ${B.log.filter(l => l.side === 0).map(l => `<span class="pill">${(l.tick * CFG.TICK).toFixed(1)}s ${SPELLS[B.sides[0].spells[l.slot].id].icon}${l.auto ? '(자동)' : ''}</span>`).join(' ')}</div>
+    ${info.spellLog.map(l => `<span class="pill">${l.t.toFixed(1)}s ${l.icon}${l.auto ? '(자동)' : ''}</span>`).join(' ')}</div>
     ${info.rewards ? `<h3 class="mt">보상</h3><div style="font-size:14px">${info.rewards}</div>` : ''}
     <h3 class="mt">다른 탁자</h3><div style="font-size:13px;line-height:1.6">${info.others.join('<br>') || '-'}</div>
     <div class="row-btns"><button class="primary" id="rNext">계속 ▶</button></div>`, box => {
@@ -174,17 +176,54 @@ function showBattleResult(info, done) {
   });
 }
 
+// 전투 B에서 side 진영의 결과 요약 (네트워크 전송용 순수 데이터)
+function battleInfo(B, side) {
+  const S = B.sides[side];
+  return {
+    roundLabel: roundLabel(), ticks: B.result.ticks, stats: { ...S.stats },
+    mine: B.units.filter(u => u.side === side && !u.summon).map(u => ({ name: u.d.name, emoji: u.d.emoji, star: u.star, dmgDone: u.dmgDone, dmgTaken: u.dmgTaken, healDone: u.healDone })),
+    spellLog: B.log.filter(l => l.side === side).map(l => ({ t: l.tick * CFG.TICK, icon: SPELLS[S.spells[l.slot].id].icon, auto: l.auto })),
+  };
+}
+
+/* ---------- 공용 선택 화면 (방장·손님 공통: 상태를 받아 그린다) ---------- */
+// st: {options:[{kind,defId,item,id,takenBy}], order:[플레이어 id], idx}
+function showCarousel(st, onPick) {
+  const cur = G.players[st.order[st.idx]];
+  const myTurn = cur && cur.id === MY_ID;
+  openModal(`<h2>🎠 공용 선택</h2><p class="sub">체력이 낮은 군주부터 하나씩 고릅니다. ${cur ? (myTurn ? '<b style="color:var(--gold)">당신의 차례입니다!</b>' : `${cur.emoji} ${esc(cur.name)} 고르는 중…`) : '선택 완료'}</p>
+    <div class="queue">${st.order.map((id, i) => { const P = G.players[id]; return `<span class="${i < st.idx ? 'done' : i === st.idx ? 'now' : ''}" title="${esc(P.name)} (${P.hp})">${P.emoji}</span>`; }).join('')}</div>
+    <div class="carousel">${st.options.map((o, i) => {
+      const tk = o.takenBy != null ? `<div class="taken-by">${G.players[o.takenBy].emoji} 선택</div>` : '';
+      const dis = o.takenBy != null ? 'disabled' : '';
+      if (o.kind === 'unit') {
+        const d = UNITS[o.defId], it = COMPONENTS[o.item];
+        return `<div class="choice ${dis}" data-c="${i}" style="border-color:${COST_COLOR[d.cost]}" data-tip="unit:${o.defId}:1">
+          <div class="ci">${d.emoji}</div><div class="cn">${d.name}</div><div class="cd">${d.cost}코스트 · ${it.icon} ${it.name}</div>${tk}</div>`;
+      }
+      const sp = SPELLS[o.id];
+      return `<div class="choice spellc ${dis}" data-c="${i}" data-tip="spell:${o.id}:1"><div class="ci">${sp.icon}</div><div class="cn">${sp.name}</div><div class="cd">주문 · 마나 ${sp.cost}</div>${tk}</div>`;
+    }).join('')}</div>`, box => {
+    box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => {
+      const i = +el.dataset.c;
+      if (!myTurn || st.options[i].takenBy != null) return;
+      onPick(i);
+    });
+  });
+}
+
 function showGameOver(P) {
-  clearSave();
+  if (NET.role === 'off') clearSave();
   const win = P.place === 1;
   openModal(`<div class="title-hero"><div class="crown">${win ? '👑' : '🪦'}</div>
     <h1>${win ? '탁자의 주인이 되었습니다!' : `${P.place}위로 탈락`}</h1>
     <p>${roundLabel()}까지 생존 · 레벨 ${P.level} · 시드 ${G.seed}</p></div>
     <h3>최종 순위</h3>
     <div style="font-size:14px;line-height:1.8">${G.players.slice().sort((a, b) => (b.alive - a.alive) || (a.alive ? b.hp - a.hp : a.place - b.place)).map(x => `${x.alive ? (G.players.filter(p => p.alive).length === 1 ? '1위' : `생존 (체력 ${x.hp})`) : x.place + '위'} ${x.emoji} ${esc(x.name)}${x.ai ? ` <small>${esc(x.ai.style)}</small>` : ''}`).join('<br>')}</div>
-    <div class="row-btns"><button id="goTitle">시작 화면</button><button class="primary" id="goNew">같은 설정으로 새 게임</button></div>`, box => {
-    box.querySelector('#goTitle').onclick = showTitle;
-    box.querySelector('#goNew').onclick = () => { const o = { lordType: human().lordType, difficulty: G.difficulty, seed: 0 }; closeModal(); startNewGame(o); };
+    <div class="row-btns">${NET.role !== 'off' && !G.over ? '<button id="goWatch">관전 계속</button>' : ''}<button id="goTitle">${NET.role === 'off' ? '시작 화면' : '방 나가기'}</button>${NET.role === 'off' ? '<button class="primary" id="goNew">같은 설정으로 새 게임</button>' : ''}</div>`, box => {
+    box.querySelector('#goTitle').onclick = leaveToTitle;
+    const gw = box.querySelector('#goWatch'); if (gw) gw.onclick = closeModal;
+    const gn = box.querySelector('#goNew'); if (gn) gn.onclick = () => { const o = { lordType: human().lordType, difficulty: G.difficulty, seed: 0 }; closeModal(); startNewGame(o); };
   });
 }
 
@@ -199,7 +238,7 @@ function showUnitPanel(u) {
       <div class="ui-d"><b>${info.name}</b><br><small>${info.desc}</small></div><button class="small" data-un="${i}" ${editable ? '' : 'disabled'}>빼기</button></div>`; }).join('') : '<div class="empty-note">없음 — 보관함의 아이템을 누른 뒤 이 유닛을 누르면 장착됩니다.</div>'}
     <div class="row-btns"><button id="upSell" ${editable ? '' : 'disabled'}>판매 +${sellPrice(u) + (hasAug(P, 'broker') ? 1 : 0)}🪙</button><button class="primary" id="upClose">닫기</button></div>`, box => {
     box.querySelectorAll('[data-un]').forEach(el => el.onclick = () => { unequipItem(P, u, +el.dataset.un); renderAll(); showUnitPanel(u); });
-    box.querySelector('#upSell').onclick = () => { sellUnit(P, u); closeModal(); toast('판매 완료'); renderAll(); };
+    box.querySelector('#upSell').onclick = () => { if (NET.role === 'guest') netAct('sell', { uid: u.uid }); else { sellUnit(P, u); toast('판매 완료'); } closeModal(); renderAll(); };
     box.querySelector('#upClose').onclick = closeModal;
   });
 }

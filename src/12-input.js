@@ -24,7 +24,9 @@ function unitAt(h) {
   if (h.r < 4) return null;
   return P.board.find(u => u.r === h.r - 4 && u.c === h.c) || null;
 }
-const boardEditable = () => G && G.phase === 'prep' && !UI.battleView;
+const boardEditable = () => G && G.phase === 'prep';
+// 화면(뒤집힌 보기 포함)의 칸 → 엔진 좌표
+const engineCell = h => ({ r: flipped() ? GROWS - 1 - h.r : h.r, c: flipped() ? GCOLS - 1 - h.c : h.c });
 
 /* ---------- 끌어놓기 ---------- */
 function beginDrag(e, payload, icon) {
@@ -72,8 +74,9 @@ window.addEventListener('pointermove', e => {
   UI.hover = h;
   if (UI.aim && UI.battle) {
     if (h && h.kind === 'board') {
-      const occ = UI.battle.occ[h.r][h.c];
-      UI.aimHover = { r: h.r, c: h.c, uid: occ || null };
+      const ec = engineCell(h);
+      const occ = UI.battle.occ[ec.r][ec.c];
+      UI.aimHover = { r: ec.r, c: ec.c, uid: occ || null };
     }
     return;
   }
@@ -105,11 +108,12 @@ window.addEventListener('pointerup', e => {
   if (drag.unit) {
     if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
       if (P.board.includes(drag.unit) && !boardEditable()) return;
+      if (NET.role === 'guest') { netAct('sell', { uid: drag.unit.uid }); return; }
       sellUnit(P, drag.unit); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
     }
     const [x, y] = canvasPoint(e);
     const h = hitTest(x, y);
-    if (h) moveUnit(P, drag.unit, drag.from, h);
+    if (h) { if (NET.role === 'guest') netAct('move', { uid: drag.unit.uid, to: h }); moveUnit(P, drag.unit, drag.from, h); }
     renderAll();
     return;
   }
@@ -125,11 +129,11 @@ window.addEventListener('pointerup', e => {
 });
 
 // 보관함 아이템 → 유닛 장착 (끌어놓기와 탭 공용)
-function equipFromInventory(u, idx) {
-  const P = human();
+function equipFromInventory(u, idx, P = human()) {
+  if (NET.role === 'guest') { UI.selItem = null; netAct('equip', { uid: u.uid, idx }); return; }
   const it = P.items[idx];
   if (it == null) return;
-  if (equipItem(u, it)) { P.items.splice(idx, 1); UI.selItem = null; toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
+  if (equipItem(u, it)) { P.items.splice(idx, 1); if (P === human()) UI.selItem = null; toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
   else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
 }
 // 유닛을 탭: 선택된 아이템이 있으면 장착, 없으면 유닛 정보 창(장비 해제·판매)
@@ -143,6 +147,7 @@ function tapUnit(u) {
   showUnitPanel(u);
 }
 function unequipItem(P, u, i) {
+  if (NET.role === 'guest') { netAct('unequip', { uid: u.uid, i }); return; }
   const it = u.items.splice(i, 1)[0];
   if (it != null) P.items.push(it);
 }
@@ -199,14 +204,15 @@ $('#shop').addEventListener('click', e => {
   if (!el || !G || !human().alive || G.phase === 'over') return;
   const P = human();
   const id = P.shop[+el.dataset.shop];
+  if (NET.role === 'guest') { netAct('buy', { slot: +el.dataset.shop }); return; }
   if (!buyUnit(P, +el.dataset.shop)) {
     if (id && P.gold < UNITS[id].cost) toast('골드가 부족합니다', 'bad');
     else if (id) toast('대기석이 가득 찼습니다', 'bad');
   }
   renderAll();
 });
-$('#btnXp').onclick = () => { if (G && G.phase === 'prep' && buyXp(human())) renderAll(); };
-$('#btnRoll').onclick = () => { if (G && G.phase !== 'over' && reroll(human())) renderAll(); };
+$('#btnXp').onclick = () => { if (G && G.phase === 'prep') { if (NET.role === 'guest') netAct('xp'); else if (buyXp(human())) renderAll(); } };
+$('#btnRoll').onclick = () => { if (G && G.phase !== 'over') { if (NET.role === 'guest') netAct('roll'); else if (reroll(human())) renderAll(); } };
 $('#btnReady').onclick = onReady;
 $('#btnSpellbook').onclick = () => G && showSpellbook();
 $('#btnHelp').onclick = () => showHelp();
@@ -214,12 +220,13 @@ $('#btnMenu').onclick = () => G && showMenu();
 $('#btnSpeed').onclick = cycleSpeed;
 function cycleSpeed() {
   if (!G) return;
+  if (NET.role !== 'off') { toast('온라인 대결은 실시간으로만 진행됩니다'); return; }
   if (G.instant) { G.instant = false; G.battleSpeed = 1; }
   else if (G.battleSpeed === 1) G.battleSpeed = 2;
   else G.instant = true;
   // 즉시 결과로 바꾸면 진행 중 전투도 자동 시전으로 즉시 마무리
   if (G.instant && UI.battle && UI.battleView && !UI.battle.over) {
-    UI.battle.sides[0].forceAuto = true;
+    UI.battle.sides[UI.mySide].forceAuto = true;
     UI.battle.headless = true;
     cancelAim();
     let guard = 0;
@@ -255,7 +262,7 @@ document.addEventListener('mouseout', e => {
 function startAim(i) {
   const B = UI.battle;
   if (!B || B.over) return;
-  const S = B.sides[0];
+  const S = B.sides[UI.mySide];
   const sl = S.spells[i];
   if (!sl) return;
   if (!spellReady(S, i)) {
@@ -263,7 +270,7 @@ function startAim(i) {
     return;
   }
   const sp = SPELLS[sl.id];
-  if (sp.target === 'none') { queueSpell(B, 0, i, {}); cancelAim(); return; }
+  if (sp.target === 'none') { castNow(i, {}); cancelAim(); return; }
   UI.aim = { slot: i, first: null };
   UI.aimHover = null; UI.tabIdx = -1;
   updateAimHint();
@@ -275,27 +282,28 @@ function cancelAim() {
 }
 function updateAimHint() {
   if (!UI.aim) { $('#aimHint').textContent = ''; return; }
-  const sp = SPELLS[UI.battle.sides[0].spells[UI.aim.slot].id];
+  const sp = SPELLS[UI.battle.sides[UI.mySide].spells[UI.aim.slot].id];
   const t = {
     ally: '아군 유닛을 선택', enemy: '적 유닛을 선택', row: '가로 줄을 선택', cell: '범위 중심 칸을 선택',
     ally2: UI.aim.first ? '맞바꿀 두 번째 아군 선택' : '첫 번째 아군 선택', allyCell: UI.aim.first ? '이동할 빈 칸 선택' : '이동시킬 아군 선택',
   }[sp.target];
-  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (0.25배속 · Tab 순환 · Enter 시전 · Esc 취소)`;
+  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (${NET.role === 'off' ? '0.25배속 · ' : ''}Tab 순환 · Enter 시전 · Esc 취소)`;
 }
 function aimClick(h) {
   if (!h || h.kind !== 'board') return;
   const B = UI.battle;
-  const occ = B.occ[h.r][h.c];
-  UI.aimHover = { r: h.r, c: h.c, uid: occ || null };
+  const ec = engineCell(h);
+  const occ = B.occ[ec.r][ec.c];
+  UI.aimHover = { r: ec.r, c: ec.c, uid: occ || null };
   confirmAim();
 }
 function confirmAim() {
   const B = UI.battle, a = UI.aim, hv = UI.aimHover;
   if (!B || !a || !hv) return;
-  const S = B.sides[0];
+  const S = B.sides[UI.mySide];
   const sp = SPELLS[S.spells[a.slot].id];
   const u = hv.uid ? unitByUid(B, hv.uid) : null;
-  const ally = u && u.side === 0 && targetable(u), foe = u && u.side === 1 && targetable(u);
+  const ally = u && u.side === UI.mySide && targetable(u), foe = u && u.side !== UI.mySide && targetable(u);
   let target = null;
   switch (sp.target) {
     case 'ally': if (ally) target = { uid: u.uid }; break;
@@ -313,14 +321,19 @@ function confirmAim() {
       break;
   }
   if (!target) { toast('올바른 대상이 아닙니다', 'bad'); return; }
-  queueSpell(B, 0, a.slot, target);
+  castNow(a.slot, target);
   cancelAim();
+}
+// 주문 시전: 혼자·방장은 엔진에 바로 입력, 손님은 방장에게 요청
+function castNow(slot, target) {
+  if (NET.role === 'guest') netSend({ t: 'cast', slot, target });
+  else queueSpell(UI.battle, UI.mySide, slot, target);
 }
 // Tab: 유효한 대상을 순환
 function aimCandidates() {
   const B = UI.battle, a = UI.aim;
-  const sp = SPELLS[B.sides[0].spells[a.slot].id];
-  const allies = B.units.filter(u => u.side === 0 && targetable(u)), foes = B.units.filter(u => u.side === 1 && targetable(u));
+  const sp = SPELLS[B.sides[UI.mySide].spells[a.slot].id];
+  const allies = B.units.filter(u => u.side === UI.mySide && targetable(u)), foes = B.units.filter(u => u.side !== UI.mySide && targetable(u));
   const asHover = u => ({ r: u.r, c: u.c, uid: u.uid });
   switch (sp.target) {
     case 'ally': return allies.map(asHover);
@@ -330,7 +343,7 @@ function aimCandidates() {
     case 'allyCell': {
       if (!a.first) return allies.map(asHover);
       const c = [];
-      for (let r = 4; r < GROWS; r++) for (let cc = 0; cc < GCOLS; cc++) if (!B.occ[r][cc]) c.push({ r, c: cc, uid: null });
+      for (let r = UI.mySide === 0 ? 4 : 0; r < (UI.mySide === 0 ? GROWS : 4); r++) for (let cc = 0; cc < GCOLS; cc++) if (!B.occ[r][cc]) c.push({ r, c: cc, uid: null });
       return c;
     }
   }
@@ -367,6 +380,7 @@ window.addEventListener('keydown', e => {
   else if (k === 'h') showHelp();
   else if (k === 'e') {
     const u = unitAt(UI.hover);
-    if (u && (!human().board.includes(u) || boardEditable())) { sellUnit(human(), u); toast(`판매 +${sellPrice(u)}🪙`); hideTip(); renderAll(); }
+    if (u && NET.role === 'guest' && (!human().board.includes(u) || boardEditable())) { netAct('sell', { uid: u.uid }); hideTip(); }
+    else if (u && (!human().board.includes(u) || boardEditable())) { sellUnit(human(), u); toast(`판매 +${sellPrice(u)}🪙`); hideTip(); renderAll(); }
   }
 });

@@ -258,7 +258,7 @@ table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7
 <div id="app">
   <header id="topbar">
     <div class="brand">👑 <span>일곱 군주의 탁자</span></div>
-    <div class="round-info"><span id="roundLabel">1-1</span><span id="roundType" class="pill">몬스터</span></div>
+    <div class="round-info"><span id="roundLabel">1-1</span><span id="roundType" class="pill">몬스터</span><span id="timerVal" class="pill hidden"></span></div>
     <div class="stats">
       <div class="stat" title="군주 체력"><span>❤️</span><b id="hpVal">100</b></div>
       <div class="stat" title="골드 (이자: 10골드당 1)"><span>🪙</span><b id="goldVal">0</b><small id="interestVal"></small></div>
@@ -1753,6 +1753,9 @@ function aiCastTick(B, S, dt) {
  * ===================================================================== */
 
 let G = null;
+let MY_ID = 0; // 이 화면의 주인(플레이어 번호). 온라인 손님은 0이 아니다.
+const HUMAN_EMOJIS = ['🧑‍✈️', '🧙', '🥷', '🧝', '🧛', '🧞', '🧜', '🦸'];
+const DEFAULT_AI = () => ({ p: { econ: .5, level: .5, commit: .6, reroll: .3, spell: .5 }, fav: ['guardian', 'fire'], focus: ['guardian', 'fire'], style: '연결이 끊겨 AI가 대신 플레이하는 군주', rerollLevel: 5 });
 const SAVE_KEY = 'sevenLordsTable.save.v1';
 
 function newGame(opts) {
@@ -1765,12 +1768,17 @@ function newGame(opts) {
     battleSpeed: 1, instant: false, over: false,
   };
   for (const id in UNITS) G.pool[id] = POOL_SIZE[UNITS[id].cost];
-  // 플레이어
-  G.players.push(makePlayer(0, '나', '🧑‍✈️', opts.lordType, true));
-  // AI 군주 12명 중 7명 무작위, 성향 수치에 소폭 변동
-  const roster = rng.shuffle(LORD_ROSTER.slice()).slice(0, 7);
+  // 사람 플레이어 (혼자 하면 1명, 온라인이면 최대 8명)
+  const humans = opts.humans || [{ name: '나', lordType: opts.lordType }];
+  humans.forEach((h, i) => {
+    const P = makePlayer(i, h.name, HUMAN_EMOJIS[i], h.lordType, true);
+    P.ai = DEFAULT_AI(); // 연결이 끊기면 이 성향으로 AI가 이어받는다
+    G.players.push(P);
+  });
+  // 남는 자리는 AI 군주 (12명 중 무작위), 성향 수치에 소폭 변동
+  const roster = rng.shuffle(LORD_ROSTER.slice()).slice(0, 8 - humans.length);
   roster.forEach((L, i) => {
-    const P = makePlayer(i + 1, L.name, L.emoji, L.type, false);
+    const P = makePlayer(humans.length + i, L.name, L.emoji, L.type, false);
     const p = {};
     for (const k in L.p) p[k] = clamp(L.p[k] + rng.range(-0.12, 0.12), 0, 1);
     P.ai = { p, fav: L.fav.slice(), focus: L.fav.slice(), style: L.style, rerollLevel: rng.pick([4, 5, 6]) };
@@ -1811,7 +1819,7 @@ function makePlayer(id, name, emoji, lordType, isHuman) {
   };
 }
 function makeUnit(defId, star) { return { uid: G.uidN++, defId, star, items: [] }; }
-const human = () => G.players[0];
+const human = () => G.players[MY_ID];
 const hasAug = (P, id) => P.aug.some(a => a.id === id);
 function boardLimit(P) { return P.level + (hasAug(P, 'bigBoard') ? 1 : 0); }
 function spellSlots(P) { return 2 + (P.level >= 7 ? 1 : 0) + (hasAug(P, 'spellSlot') ? 1 : 0); }
@@ -2017,7 +2025,7 @@ function applyAugment(P, a) {
     }
     case 'legendCall': grantRandomUnit(P, 4, 1); break;
     case 'freeSpell':
-      if (P.isHuman) G.pendingSpellPick = true;
+      if (P.isHuman) P.pendingSpell = true;
       else { const ids = spellOffers(P, 3); if (ids.length) addSpell(P, aiPickSpell(P, ids)); }
       break;
   }
@@ -2421,6 +2429,7 @@ function resizeCanvas() {
 // 전투 연출 상태
 const FX = { floats: [], projs: [], flashes: [], texts: [], shake: 0 };
 const UI = {
+  mySide: 0, flip: false, // 지금 보는 전투에서 내가 속한 진영
   hover: null,          // {kind:'board'|'bench', r, c, i}
   drag: null,           // {unit, from, x, y} 또는 {item, idx}
   aim: null,            // {slot, step, first}
@@ -2430,7 +2439,11 @@ const UI = {
   lastFrame: 0, acc: 0,
 };
 
-function cellCenter(r, c) { return [c * VIEW.CELL + VIEW.CELL / 2, r * VIEW.CELL + VIEW.CELL / 2]; }
+// 전투 화면에서 위쪽 진영(side 1)의 플레이어는 보드를 180도 돌려서 본다 → 항상 내 유닛이 아래
+const flipped = () => UI.flip && UI.battleView;
+const vr = r => (flipped() ? GROWS - 1 - r : r);
+const vc = c => (flipped() ? GCOLS - 1 - c : c);
+function cellCenter(r, c) { return [vc(c) * VIEW.CELL + VIEW.CELL / 2, vr(r) * VIEW.CELL + VIEW.CELL / 2]; }
 function benchCenter(i) { return [i * VIEW.BENCH_W + VIEW.BENCH_W / 2, VIEW.BENCH_Y + VIEW.BENCH_H / 2]; }
 
 function unitScreenPos(u) {
@@ -2526,7 +2539,7 @@ function drawUnitToken(x, y, rad, u, o = {}) {
   ctx.save();
   if (o.alpha != null) ctx.globalAlpha = o.alpha;
   ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
-  ctx.fillStyle = o.side === 1 ? '#3a1d1d' : '#1d2a3a';
+  ctx.fillStyle = o.side === 1 ? '#3a1d1d' : '#1d2a3a'; // side: 0 = 아군, 1 = 적군
   ctx.fill();
   ctx.lineWidth = o.small ? 2.5 : 3.5; ctx.strokeStyle = col; ctx.stroke();
   if (o.side === 1) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#ff5f5f'; ctx.beginPath(); ctx.arc(x, y, rad + 3, 0, Math.PI * 2); ctx.stroke(); }
@@ -2553,9 +2566,9 @@ function drawBattle(B) {
   // 화염 지대
   for (const z of B.zones) {
     ctx.fillStyle = `rgba(255,90,30,${0.18 + 0.08 * Math.sin(performance.now() / 120)})`;
-    ctx.fillRect(0, z.row * VIEW.CELL, VIEW.W, VIEW.CELL);
+    ctx.fillRect(0, vr(z.row) * VIEW.CELL, VIEW.W, VIEW.CELL);
     ctx.font = '14px sans-serif';
-    for (let c = 0; c < GCOLS; c++) ctx.fillText('🔥', c * VIEW.CELL + 12, z.row * VIEW.CELL + 14);
+    for (let c = 0; c < GCOLS; c++) ctx.fillText('🔥', c * VIEW.CELL + 12, vr(z.row) * VIEW.CELL + 14);
   }
   drawAimOverlay(B);
   const list = B.units.filter(u => u.alive || u.ghost > 0 || u.reviving > 0);
@@ -2568,7 +2581,7 @@ function drawBattle(B) {
     if (u.undying > 0) glow(x, y, 30, '#ffd84a');
     if (u.taunt > 0) glow(x, y, 30, '#ff8f5a');
     if (isAimTarget) glow(x, y, 32, '#f2c14e');
-    drawUnitToken(x, y, 23, u, { side: u.side, alpha });
+    drawUnitToken(x, y, 23, u, { side: u.side === UI.mySide ? 0 : 1, alpha });
     if (u.freeze > 0) { ctx.fillStyle = '#8fd8ff66'; ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI * 2); ctx.fill(); }
     if (u.ghost <= 0 && u.reviving <= 0) drawBars(u, x, y);
     // 상태 아이콘
@@ -2591,7 +2604,7 @@ function drawBars(u, x, y) {
   const shield = sum(u.shields.map(s => s.amt));
   const tot = Math.max(u.maxHp, u.hp + shield);
   ctx.fillStyle = '#000a'; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
-  ctx.fillStyle = u.side === 0 ? '#59d97a' : '#ff5f5f';
+  ctx.fillStyle = u.side === UI.mySide ? '#59d97a' : '#ff5f5f';
   ctx.fillRect(bx, by, w * (u.hp / tot), h);
   if (shield > 0) { ctx.fillStyle = '#e8f0ff'; ctx.fillRect(bx + w * (u.hp / tot), by, w * (shield / tot), h); }
   // 체력 눈금 (300마다)
@@ -2605,22 +2618,22 @@ function drawBars(u, x, y) {
 
 function drawAimOverlay(B) {
   if (!UI.aim) return;
-  const S = B.sides[0];
+  const S = B.sides[UI.mySide];
   const sl = S.spells[UI.aim.slot];
   const sp = SPELLS[sl.id];
   const h = UI.aimHover;
   if (sp.target === 'row' && h && h.r != null) {
-    ctx.fillStyle = '#ff7a3044'; ctx.fillRect(0, h.r * VIEW.CELL, VIEW.W, VIEW.CELL);
+    ctx.fillStyle = '#ff7a3044'; ctx.fillRect(0, vr(h.r) * VIEW.CELL, VIEW.W, VIEW.CELL);
   }
   if ((sp.target === 'cell') && h && h.r != null) {
     ctx.fillStyle = '#7cc6ff33';
-    ctx.fillRect((h.c - 1) * VIEW.CELL, (h.r - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
+    ctx.fillRect((vc(h.c) - 1) * VIEW.CELL, (vr(h.r) - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
     ctx.strokeStyle = '#7cc6ff'; ctx.lineWidth = 2;
-    ctx.strokeRect((h.c - 1) * VIEW.CELL, (h.r - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
+    ctx.strokeRect((vc(h.c) - 1) * VIEW.CELL, (vr(h.r) - 1) * VIEW.CELL, VIEW.CELL * 3, VIEW.CELL * 3);
   }
   if (sp.target === 'allyCell' && UI.aim.first && h && h.r != null && !B.occ[h.r][h.c]) {
     ctx.strokeStyle = '#b07cff'; ctx.lineWidth = 2;
-    ctx.strokeRect(h.c * VIEW.CELL + 3, h.r * VIEW.CELL + 3, VIEW.CELL - 6, VIEW.CELL - 6);
+    ctx.strokeRect(vc(h.c) * VIEW.CELL + 3, vr(h.r) * VIEW.CELL + 3, VIEW.CELL - 6, VIEW.CELL - 6);
   }
   if (UI.aim.first) {
     const a = unitByUid(B, UI.aim.first);
@@ -2663,7 +2676,7 @@ function pushEffects(B, events) {
       }
       case 'spell': showSpellBanner(e); {
         const t = e.target || {};
-        if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === 0 ? '#7cc6ff' : '#ff6b6b' }); }
+        if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === UI.mySide ? '#7cc6ff' : '#ff6b6b' }); }
         if (t.r != null && t.c != null && t.uid == null) { const [x, y] = cellCenter(t.r, t.c); FX.flashes.push({ x, y, t: 0, dur: 0.6, kind: 'burst', color: '#7cc6ff', size: 90 }); }
         if (e.id === 'timestop') FX.shake = 0.3;
         break;
@@ -2741,7 +2754,7 @@ function drawEffects() {
 
 function showSpellBanner(e) {
   const el = document.createElement('div');
-  el.className = 'spell-banner' + (e.side === 1 ? ' enemy' : '');
+  el.className = 'spell-banner' + (e.side !== UI.mySide ? ' enemy' : '');
   el.textContent = `${e.emoji} ${e.lord} — ${e.icon} ${e.name}${e.auto ? ' (자동)' : ''}`;
   const box = document.getElementById('banner');
   box.appendChild(el);
@@ -2759,6 +2772,7 @@ function drawDragGhostHint() {
  * ===================================================================== */
 
 function toast(msg, kind) {
+  if (NET.capture) { NET.capture.push([msg, kind]); return; } // 방장이 손님의 행동을 처리하는 중이면 그 손님에게 보낼 알림으로 모아 둔다
   const el = document.createElement('div');
   el.className = 'toast' + (kind ? ' ' + kind : '');
   el.textContent = msg;
@@ -2785,14 +2799,18 @@ function renderTop() {
   $('#xpFill').style.width = P.level >= 9 ? '100%' : `${(P.xp / need) * 100}%`;
   $('#streakIcon').textContent = P.streak > 0 ? '🔥' : P.streak < 0 ? '🧊' : '➖';
   $('#streakVal').textContent = Math.abs(P.streak);
-  $('#btnSpeed').textContent = G.instant ? '즉시 결과' : `${G.battleSpeed}배속`;
+  $('#btnSpeed').textContent = NET.role !== 'off' ? '실시간' : G.instant ? '즉시 결과' : `${G.battleSpeed}배속`;
+  const tm = $('#timerVal');
+  tm.classList.toggle('hidden', !(G.phase === 'prep' && G.prepLeft > 0));
+  tm.textContent = `⏱ ${G.prepLeft}초`;
   const prep = G.phase === 'prep';
   $('#btnXp').disabled = !prep || P.gold < xpCost(P) || P.level >= 9;
   $('#btnXp').innerHTML = `⬆ 경험치<br><small>${xpCost(P)}🪙</small>`;
   $('#btnRoll').disabled = P.gold < rerollCost(P) || !P.alive || G.phase === 'over';
   $('#btnRoll').innerHTML = `🔄 새로고침<br><small>${rerollCost(P)}🪙</small>`;
-  $('#btnReady').disabled = !prep;
-  $('#btnReady').textContent = prep ? '준비 완료 ▶' : G.phase === 'battle' ? '전투 중…' : '대기 중';
+  $('#btnReady').disabled = !prep || P.ready || !P.alive;
+  const rd = G.readyInfo && NET.role !== 'off' ? ` (${G.readyInfo[0]}/${G.readyInfo[1]})` : '';
+  $('#btnReady').textContent = prep ? (P.ready ? '다른 플레이어 대기 중' + rd : '준비 완료 ▶' + rd) : G.phase === 'battle' ? '전투 중…' : '대기 중';
 }
 
 function renderTraits() {
@@ -2830,7 +2848,7 @@ function renderAugs() {
 function renderSpellBar() {
   const P = human();
   const B = UI.battleView ? UI.battle : null;
-  const S = B ? B.sides[0] : null;
+  const S = B ? B.sides[UI.mySide] : null;
   const lm = S ? S.lm : (hasAug(P, 'manaHead') ? 3 : 0);
   const lmMax = S ? S.lmMax : (hasAug(P, 'manaVault') ? 14 : CFG.LORD_MANA_MAX);
   $('#lmVal').textContent = Math.floor(lm);
@@ -2879,9 +2897,9 @@ function renderPlayers() {
   $('#players').innerHTML = list.map(P => {
     const hp = Math.max(0, P.hp);
     const st = P.streak > 1 ? `🔥${P.streak}` : P.streak < -1 ? `🧊${-P.streak}` : '';
-    return `<div class="prow ${P.isHuman ? 'me' : ''} ${P.alive ? '' : 'dead'} ${opp === P.id ? 'opp' : ''}" data-player="${P.id}">
+    return `<div class="prow ${P.id === MY_ID ? 'me' : ''} ${P.alive ? '' : 'dead'} ${opp === P.id ? 'opp' : ''}" data-player="${P.id}">
       <div class="pe">${P.emoji}</div>
-      <div class="pm"><div class="pn">${esc(P.name)} <span class="ps">Lv${P.level} ${LORD_TYPES[P.lordType].icon} ${st}</span></div>
+      <div class="pm"><div class="pn">${esc(P.name)} <span class="ps">${P.isHuman ? '👤' : ''}Lv${P.level} ${LORD_TYPES[P.lordType].icon} ${st}</span></div>
       <div class="ph"><i style="width:${Math.min(100, hp)}%"></i></div></div>
       <div class="pv">${P.alive ? hp : '#' + P.place}</div></div>`;
   }).join('');
@@ -2992,6 +3010,7 @@ function showTitle() {
     <div class="field"><label>시드</label><input id="seedIn" placeholder="비우면 무작위" inputmode="numeric" style="width:160px"><small>같은 시드 = 같은 판</small></div>
     <div class="row-btns">
       <button id="tSim" class="ghost">📊 밸런스 시뮬레이션</button>
+      <button id="tOnline">🌐 온라인 대결</button>
       <button id="tHelp" class="ghost">도움말</button>
       ${saved && !saved.over ? `<button id="tCont">이어하기 (${saved.stage}-${saved.round})</button>` : ''}
       <button id="tNew" class="primary">새 게임 시작</button>
@@ -3010,6 +3029,7 @@ function showTitle() {
     const c = box.querySelector('#tCont');
     if (c) c.onclick = () => { closeModal(); continueGame(saved); };
     box.querySelector('#tHelp').onclick = () => showHelp(showTitle);
+    box.querySelector('#tOnline').onclick = showOnlineMenu;
     box.querySelector('#tSim').onclick = () => showSimulation(showTitle);
   });
 }
@@ -3037,12 +3057,12 @@ function showMenu() {
       <button id="mResume" class="primary">계속하기</button>
       <button id="mHelp">도움말</button>
       <button id="mSim">밸런스 시뮬레이션</button>
-      <button id="mTitle">시작 화면으로 (자동 저장됨)</button>
+      <button id="mTitle">${NET.role === 'off' ? '시작 화면으로 (자동 저장됨)' : '방 나가기'}</button>
     </div>`, box => {
     box.querySelector('#mResume').onclick = closeModal;
     box.querySelector('#mHelp').onclick = () => showHelp(showMenu);
     box.querySelector('#mSim').onclick = () => showSimulation(showMenu);
-    box.querySelector('#mTitle').onclick = () => { if (G.phase === 'prep') saveGame(); stopBattle(); showTitle(); };
+    box.querySelector('#mTitle').onclick = leaveToTitle;
   });
 }
 
@@ -3084,9 +3104,9 @@ function showSpellbook() {
           <button class="small" data-up="${i}" ${prep && upCost && P.gold >= upCost ? '' : 'disabled'}>${upCost ? `강화 ${upCost}🪙` : '최대'}</button></div></div>`;
       }).join('')}
       <div class="row-btns"><button class="primary" id="sbClose">닫기</button></div>`, box => {
-      box.querySelectorAll('[data-eq]').forEach(el => el.onclick = () => { toggleEquip(P, +el.dataset.eq); render(); renderAll(); });
-      box.querySelectorAll('[data-up]').forEach(el => el.onclick = () => { if (upgradeSpell(P, +el.dataset.up)) toast('주문 강화!', 'gold'); render(); renderAll(); });
-      box.querySelectorAll('[data-rule]').forEach(el => el.onchange = () => { P.spells[+el.dataset.rule].rule = el.value; renderAll(); });
+      box.querySelectorAll('[data-eq]').forEach(el => el.onclick = () => { toggleEquip(P, +el.dataset.eq); if (NET.role === 'guest') netAct('eqSpell', { i: +el.dataset.eq }); render(); renderAll(); });
+      box.querySelectorAll('[data-up]').forEach(el => el.onclick = () => { if (upgradeSpell(P, +el.dataset.up)) toast('주문 강화!', 'gold'); if (NET.role === 'guest') netAct('upSpell', { i: +el.dataset.up }); render(); renderAll(); });
+      box.querySelectorAll('[data-rule]').forEach(el => el.onchange = () => { P.spells[+el.dataset.rule].rule = el.value; if (NET.role === 'guest') netAct('rule', { i: +el.dataset.rule, v: el.value }); renderAll(); });
       box.querySelector('#sbClose').onclick = closeModal;
     });
   };
@@ -3119,20 +3139,20 @@ function showPlayer(id) {
 }
 
 /* ---------- 전투 결과 ---------- */
+// info는 네트워크로도 전달되므로 순수 데이터만 담는다 (battleInfo 참고)
 function showBattleResult(info, done) {
-  const B = info.B;
-  const mine = B.units.filter(u => u.side === 0 && !u.summon);
+  const mine = info.mine.slice().sort((a, b) => b.dmgDone - a.dmgDone);
   const maxD = Math.max(1, ...mine.map(u => u.dmgDone));
-  const S = B.sides[0].stats;
+  const S = info.stats;
   const head = info.won ? '<div class="result-head win">승리!</div>' : info.timeout ? `<div class="result-head lose">시간 초과 — 양쪽 패배 (-${info.dmg})</div>` : `<div class="result-head lose">패배 (-${info.dmg})</div>`;
-  openModal(`${head}<p class="sub">${roundLabel()} · 상대: ${esc(info.oppName)}${info.ghost ? ' (유령 복제)' : ''} · 전투 시간 ${(B.result.ticks * CFG.TICK).toFixed(1)}초</p>
+  openModal(`${head}<p class="sub">${info.roundLabel} · 상대: ${esc(info.oppName)}${info.ghost ? ' (유령 복제)' : ''} · 전투 시간 ${(info.ticks * CFG.TICK).toFixed(1)}초</p>
     <h3>유닛별 기여</h3>
     <table class="stats"><tr><th>유닛</th><th>준 피해</th><th style="width:40%"></th><th>받은 피해</th><th>회복</th></tr>
-    ${mine.sort((a, b) => b.dmgDone - a.dmgDone).map(u => `<tr><td>${u.d.emoji} ${u.d.name} ${'★'.repeat(u.star)}</td><td>${Math.round(u.dmgDone)}</td>
+    ${mine.map(u => `<tr><td>${u.emoji} ${esc(u.name)} ${'★'.repeat(u.star)}</td><td>${Math.round(u.dmgDone)}</td>
       <td><div class="bar" style="width:${(u.dmgDone / maxD) * 100}%"></div></td><td>${Math.round(u.dmgTaken)}</td><td>${Math.round(u.healDone)}</td></tr>`).join('')}</table>
     <h3 class="mt">주문 기여</h3>
     <div style="font-size:13px">시전 ${S.casts}회 · 주문 피해 ${Math.round(S.spellDmg)} · 회복 ${Math.round(S.spellHeal)} · 보호막 ${Math.round(S.spellShield)}
-    ${B.log.filter(l => l.side === 0).map(l => `<span class="pill">${(l.tick * CFG.TICK).toFixed(1)}s ${SPELLS[B.sides[0].spells[l.slot].id].icon}${l.auto ? '(자동)' : ''}</span>`).join(' ')}</div>
+    ${info.spellLog.map(l => `<span class="pill">${l.t.toFixed(1)}s ${l.icon}${l.auto ? '(자동)' : ''}</span>`).join(' ')}</div>
     ${info.rewards ? `<h3 class="mt">보상</h3><div style="font-size:14px">${info.rewards}</div>` : ''}
     <h3 class="mt">다른 탁자</h3><div style="font-size:13px;line-height:1.6">${info.others.join('<br>') || '-'}</div>
     <div class="row-btns"><button class="primary" id="rNext">계속 ▶</button></div>`, box => {
@@ -3140,17 +3160,54 @@ function showBattleResult(info, done) {
   });
 }
 
+// 전투 B에서 side 진영의 결과 요약 (네트워크 전송용 순수 데이터)
+function battleInfo(B, side) {
+  const S = B.sides[side];
+  return {
+    roundLabel: roundLabel(), ticks: B.result.ticks, stats: { ...S.stats },
+    mine: B.units.filter(u => u.side === side && !u.summon).map(u => ({ name: u.d.name, emoji: u.d.emoji, star: u.star, dmgDone: u.dmgDone, dmgTaken: u.dmgTaken, healDone: u.healDone })),
+    spellLog: B.log.filter(l => l.side === side).map(l => ({ t: l.tick * CFG.TICK, icon: SPELLS[S.spells[l.slot].id].icon, auto: l.auto })),
+  };
+}
+
+/* ---------- 공용 선택 화면 (방장·손님 공통: 상태를 받아 그린다) ---------- */
+// st: {options:[{kind,defId,item,id,takenBy}], order:[플레이어 id], idx}
+function showCarousel(st, onPick) {
+  const cur = G.players[st.order[st.idx]];
+  const myTurn = cur && cur.id === MY_ID;
+  openModal(`<h2>🎠 공용 선택</h2><p class="sub">체력이 낮은 군주부터 하나씩 고릅니다. ${cur ? (myTurn ? '<b style="color:var(--gold)">당신의 차례입니다!</b>' : `${cur.emoji} ${esc(cur.name)} 고르는 중…`) : '선택 완료'}</p>
+    <div class="queue">${st.order.map((id, i) => { const P = G.players[id]; return `<span class="${i < st.idx ? 'done' : i === st.idx ? 'now' : ''}" title="${esc(P.name)} (${P.hp})">${P.emoji}</span>`; }).join('')}</div>
+    <div class="carousel">${st.options.map((o, i) => {
+      const tk = o.takenBy != null ? `<div class="taken-by">${G.players[o.takenBy].emoji} 선택</div>` : '';
+      const dis = o.takenBy != null ? 'disabled' : '';
+      if (o.kind === 'unit') {
+        const d = UNITS[o.defId], it = COMPONENTS[o.item];
+        return `<div class="choice ${dis}" data-c="${i}" style="border-color:${COST_COLOR[d.cost]}" data-tip="unit:${o.defId}:1">
+          <div class="ci">${d.emoji}</div><div class="cn">${d.name}</div><div class="cd">${d.cost}코스트 · ${it.icon} ${it.name}</div>${tk}</div>`;
+      }
+      const sp = SPELLS[o.id];
+      return `<div class="choice spellc ${dis}" data-c="${i}" data-tip="spell:${o.id}:1"><div class="ci">${sp.icon}</div><div class="cn">${sp.name}</div><div class="cd">주문 · 마나 ${sp.cost}</div>${tk}</div>`;
+    }).join('')}</div>`, box => {
+    box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => {
+      const i = +el.dataset.c;
+      if (!myTurn || st.options[i].takenBy != null) return;
+      onPick(i);
+    });
+  });
+}
+
 function showGameOver(P) {
-  clearSave();
+  if (NET.role === 'off') clearSave();
   const win = P.place === 1;
   openModal(`<div class="title-hero"><div class="crown">${win ? '👑' : '🪦'}</div>
     <h1>${win ? '탁자의 주인이 되었습니다!' : `${P.place}위로 탈락`}</h1>
     <p>${roundLabel()}까지 생존 · 레벨 ${P.level} · 시드 ${G.seed}</p></div>
     <h3>최종 순위</h3>
     <div style="font-size:14px;line-height:1.8">${G.players.slice().sort((a, b) => (b.alive - a.alive) || (a.alive ? b.hp - a.hp : a.place - b.place)).map(x => `${x.alive ? (G.players.filter(p => p.alive).length === 1 ? '1위' : `생존 (체력 ${x.hp})`) : x.place + '위'} ${x.emoji} ${esc(x.name)}${x.ai ? ` <small>${esc(x.ai.style)}</small>` : ''}`).join('<br>')}</div>
-    <div class="row-btns"><button id="goTitle">시작 화면</button><button class="primary" id="goNew">같은 설정으로 새 게임</button></div>`, box => {
-    box.querySelector('#goTitle').onclick = showTitle;
-    box.querySelector('#goNew').onclick = () => { const o = { lordType: human().lordType, difficulty: G.difficulty, seed: 0 }; closeModal(); startNewGame(o); };
+    <div class="row-btns">${NET.role !== 'off' && !G.over ? '<button id="goWatch">관전 계속</button>' : ''}<button id="goTitle">${NET.role === 'off' ? '시작 화면' : '방 나가기'}</button>${NET.role === 'off' ? '<button class="primary" id="goNew">같은 설정으로 새 게임</button>' : ''}</div>`, box => {
+    box.querySelector('#goTitle').onclick = leaveToTitle;
+    const gw = box.querySelector('#goWatch'); if (gw) gw.onclick = closeModal;
+    const gn = box.querySelector('#goNew'); if (gn) gn.onclick = () => { const o = { lordType: human().lordType, difficulty: G.difficulty, seed: 0 }; closeModal(); startNewGame(o); };
   });
 }
 
@@ -3165,114 +3222,279 @@ function showUnitPanel(u) {
       <div class="ui-d"><b>${info.name}</b><br><small>${info.desc}</small></div><button class="small" data-un="${i}" ${editable ? '' : 'disabled'}>빼기</button></div>`; }).join('') : '<div class="empty-note">없음 — 보관함의 아이템을 누른 뒤 이 유닛을 누르면 장착됩니다.</div>'}
     <div class="row-btns"><button id="upSell" ${editable ? '' : 'disabled'}>판매 +${sellPrice(u) + (hasAug(P, 'broker') ? 1 : 0)}🪙</button><button class="primary" id="upClose">닫기</button></div>`, box => {
     box.querySelectorAll('[data-un]').forEach(el => el.onclick = () => { unequipItem(P, u, +el.dataset.un); renderAll(); showUnitPanel(u); });
-    box.querySelector('#upSell').onclick = () => { sellUnit(P, u); closeModal(); toast('판매 완료'); renderAll(); };
+    box.querySelector('#upSell').onclick = () => { if (NET.role === 'guest') netAct('sell', { uid: u.uid }); else { sellUnit(P, u); toast('판매 완료'); } closeModal(); renderAll(); };
     box.querySelector('#upClose').onclick = closeModal;
   });
 }
 
 /* ===== 11-flow.js ===== */
 /* =====================================================================
- * 11. 진행 — 라운드 흐름, 전투 재생 루프, 공용 선택, 보상, 탈락
+ * 11. 진행 — 라운드 흐름(비동기), 전투 재생, 공용 선택, 보상, 탈락
+ *     혼자 하기와 온라인 방장이 같은 코드를 쓴다 (혼자 = 사람 1명짜리 방).
+ *     사람 플레이어에게 묻는 일(증강·주문·결과 확인)은 ask()로 통일:
+ *       내 화면이면 모달, 원격 플레이어면 네트워크 메시지, AI면 즉시 null.
  * ===================================================================== */
+
+const PREP_TIME = 60;                  // 온라인 준비 시간(초). 혼자 할 때는 제한 없음
+const FLOW = { token: 0, checkReady: null, localPick: null, iv: 0 };
+const LIVE = { list: [], res: null, endAt: 0, last: 0 };
+// 타이머: 방장이 다른 탭을 보고 있어도 게임이 멈추지 않도록 Web Worker 시계로 돌린다
+// (백그라운드 탭의 setTimeout/setInterval은 브라우저가 크게 늦춘다)
+const TIMERS = [];
+function later(ms, fn) { const t = { at: performance.now() + ms, fn, dead: false, every: 0 }; TIMERS.push(t); return t; }
+function everySec(fn) { const t = { at: performance.now() + 1000, fn, dead: false, every: 1000 }; TIMERS.push(t); return t; }
+function cancelTimer(t) { if (t) t.dead = true; }
+function pumpTimers() {
+  const now = performance.now();
+  for (const t of TIMERS.slice()) {
+    if (t.dead || now < t.at) continue;
+    if (t.every) t.at += t.every; else t.dead = true;
+    t.fn();
+  }
+  for (let i = TIMERS.length - 1; i >= 0; i--) if (TIMERS[i].dead) TIMERS.splice(i, 1);
+}
+const sleep = ms => new Promise(r => later(ms, r));
+// 진행 중 게임이 바뀌었으면(시작 화면으로 나감 등) 이어서 실행하지 않고 중단
+const W = async (p, tok) => { const v = await p; if (tok !== FLOW.token) throw 'aborted'; return v; };
 
 function startNewGame(opts) {
   stopBattle();
+  MY_ID = 0;
   newGame(opts);
-  clearSave();
-  beginRound();
+  if (NET.role === 'off') clearSave();
+  runGame();
 }
 function continueGame(saved) {
   stopBattle();
+  MY_ID = 0;
   G = saved;
-  beginRound();
+  runGame();
 }
 function stopBattle() {
   UI.battle = null; UI.battleView = false; UI.aim = null; UI.pending = null; UI.currentOppId = null;
+  UI.mySide = 0; UI.flip = false;
+  LIVE.list = []; LIVE.endAt = 0;
   FX.floats = []; FX.projs = []; FX.flashes = []; FX.texts = [];
   $('#aimHint').textContent = '';
 }
-
-function beginRound() {
+// 진행 중인 게임을 버리고 시작 화면으로
+function leaveToTitle() {
+  if (NET.role === 'off' && G && !G.over && G.phase === 'prep') saveGame();
+  FLOW.token++;
+  cancelTimer(FLOW.iv);
+  FLOW.checkReady = null; FLOW.localPick = null;
+  netLeave();
   stopBattle();
-  if (!G || G.over) return;
-  const type = roundType(G.stage, G.round);
-  if (type === 'carousel') { G.phase = 'carousel'; renderAll(); return runCarousel(); }
-  G.phase = 'prep';
-  startPrep();
-  const ready = () => { G.phase = 'prep'; renderAll(); toast(`${roundLabel()} 준비 단계 — ${type === 'pve' ? '중립 몬스터' : '대전'}`); };
-  if (augmentDue()) {
-    for (const P of G.players) if (P.alive && !P.isHuman) applyAugment(P, aiPickAugment(P, augmentOffers(P)));
-    G.phase = 'augment';
-    renderAll();
-    showAugmentPick(augmentOffers(human()), a => {
-      applyAugment(human(), a);
-      if (!G.pendingSpellPick) return ready();
-      G.pendingSpellPick = false;
-      showSpellPick(spellOffers(human(), 3), id => { if (id) addSpell(human(), id); ready(); });
-    });
-  } else ready();
+  if (NET.role === 'off') MY_ID = 0;
+  G = null;
+  showTitle();
 }
 
+async function runGame() {
+  const tok = ++FLOW.token;
+  try {
+    while (G && !G.over) {
+      const type = roundType(G.stage, G.round);
+      if (type === 'carousel') await carouselRound(tok); else await playRound(type, tok);
+      if (G.over) break;
+      advanceRound();
+      if (NET.role === 'off') saveGame();
+    }
+  } catch (e) {
+    if (e !== 'aborted') { console.error(e); toast('오류가 발생했습니다: ' + (e && e.message), 'bad'); }
+  }
+}
+
+/* ---------- 사람에게 묻기 ---------- */
+function ask(P, kind, data) {
+  if (!P.alive || !P.isHuman) return Promise.resolve(null);
+  if (P.id === MY_ID) return new Promise(res => showPrompt(kind, data, res));
+  return netPrompt(P.id, kind, data, kind === 'result' ? 30000 : 40000);
+}
+function showPrompt(kind, data, done) {
+  if (kind === 'augment') showAugmentPick(data.offers, done);
+  else if (kind === 'spell') showSpellPick(data.ids, done);
+  else if (kind === 'result') showBattleResult(data, () => done(true));
+}
+
+/* ---------- 한 라운드 ---------- */
+async function playRound(type, tok) {
+  stopBattle();
+  startPrep();
+  for (const P of G.players) P.ready = false;
+  if (augmentDue()) await augmentStage(tok);
+  G.phase = 'prep';
+  G.prepLeft = NET.role === 'off' ? 0 : PREP_TIME;
+  syncAll(); renderAll();
+  toast(`${roundLabel()} 준비 단계 — ${type === 'pve' ? '중립 몬스터' : '대전'}`);
+  await W(prepWait(), tok);
+  await W(battleRound(type, tok), tok);
+}
+
+async function augmentStage(tok) {
+  G.phase = 'augment';
+  syncAll(); renderAll();
+  const jobs = [];
+  for (const P of G.players) {
+    if (!P.alive) continue;
+    if (P.isHuman) jobs.push(humanAugment(P));
+    else applyAugment(P, aiPickAugment(P, augmentOffers(P)));
+  }
+  await W(Promise.all(jobs), tok);
+}
+async function humanAugment(P) {
+  const offers = augmentOffers(P);
+  const resp = await ask(P, 'augment', { offers });
+  applyAugment(P, offers.find(o => resp && o.id === resp.id && o.param === resp.param) || offers[0]);
+  await humanSpellReward(P);
+  syncTo(P);
+}
+// 주문 보상(몬스터 라운드 승리, 주문 증강)을 받을 차례면 3장 중 하나 고르게 한다
+async function humanSpellReward(P) {
+  if (!P.pendingSpell) return;
+  P.pendingSpell = false;
+  const ids = spellOffers(P, 3);
+  if (!ids.length) return;
+  const pick = await ask(P, 'spell', { ids });
+  const id = ids.includes(pick) ? pick : ids[0];
+  if (addSpell(P, id) && P.id === MY_ID) toast(`${SPELLS[id].icon} ${SPELLS[id].name} 획득`, 'gold');
+}
+
+// 모든 사람이 '준비 완료'를 누르거나 시간이 다 될 때까지 기다린다
+function prepWait() {
+  return new Promise(res => {
+    const humans = () => G.players.filter(p => p.alive && p.isHuman);
+    let left = G.prepLeft;
+    const finish = () => { cancelTimer(FLOW.iv); FLOW.checkReady = null; G.prepLeft = 0; res(); };
+    FLOW.checkReady = () => { if (humans().every(p => p.ready)) finish(); else netReadyInfo(); };
+    cancelTimer(FLOW.iv);
+    if (left > 0) FLOW.iv = everySec(() => {
+      left--; G.prepLeft = left; netReadyInfo(); renderTop();
+      if (left <= 0) { for (const p of humans()) p.ready = true; finish(); }
+    });
+    netReadyInfo();
+    FLOW.checkReady();
+  });
+}
 function onReady() {
   if (!G || G.phase !== 'prep' || modalOpen()) return;
   const P = human();
+  if (!P.alive || P.ready) return;
+  P.ready = true;
+  if (NET.role === 'guest') netAct('ready');
+  else if (FLOW.checkReady) FLOW.checkReady();
+  renderTop();
+}
+
+/* ---------- 전투 ---------- */
+function trimBoard(P) {
   while (P.board.length > boardLimit(P)) {
     const u = P.board.pop();
     const f = benchFree(P);
     if (f >= 0) P.bench[f] = u; else sellUnit(P, u);
   }
-  for (const A of G.players) if (A.alive && !A.isHuman) aiPrep(A);
-  const type = roundType(G.stage, G.round);
-  const seedBase = R().int(2 ** 30);
-  const battles = [];
-  if (type === 'pve') for (const A of G.players) { if (A.alive) battles.push({ a: A, b: null, pve: true }); }
-  else for (const [a, b, ghost] of makePairs()) battles.push({ a, b, ghost: !!ghost });
-  for (const bt of battles) if (bt.b && bt.b.isHuman && !bt.ghost) [bt.a, bt.b] = [bt.b, bt.a];
-  battles.forEach((bt, i) => { bt.seed = seedBase + i * 7919; });
-  const mb = battles.find(bt => bt.a.isHuman);
-  for (const bt of battles) if (bt !== mb) bt.B = runBattle(specOf(bt.a), bt.b ? specOf(bt.b) : monsterSpec(), bt.seed);
-  G.phase = 'battle';
-  UI.pending = { battles, type, mb };
-  UI.currentOppId = mb.b ? mb.b.id : null;
-  const oppSpec = mb.b ? specOf(mb.b) : monsterSpec();
-  if (G.instant) {
-    mb.B = runBattle(specOf(P, { forceAuto: true }), oppSpec, mb.seed);
-    renderAll();
-    finishRound();
-    return;
-  }
-  mb.B = UI.battle = createBattle(specOf(P), oppSpec, mb.seed);
-  UI.battleView = true; UI.acc = 0; UI.ending = false;
-  pushEffects(UI.battle, UI.battle.ev); UI.battle.ev = [];
-  renderAll();
-  renderTraitsBattle();
 }
 
-// 전투 중에는 시너지 패널에 실제 발동 단계 표시 (스냅샷)
-function renderTraitsBattle() { renderTraits(); }
+async function battleRound(type, tok) {
+  for (const P of G.players) if (P.alive && P.isHuman) trimBoard(P);
+  for (const A of G.players) if (A.alive && !A.isHuman) aiPrep(A);
+  const seedBase = R().int(2 ** 30);
+  const battles = [];
+  if (type === 'pve') { for (const A of G.players) if (A.alive) battles.push({ a: A, b: null, pve: true }); }
+  else for (const [a, b, ghost] of makePairs()) battles.push({ a, b, ghost: !!ghost });
+  // 사람과 AI의 대전에서는 항상 사람이 a(아래쪽 진영)
+  for (const bt of battles) if (bt.b && !bt.a.isHuman && bt.b.isHuman && !bt.ghost) [bt.a, bt.b] = [bt.b, bt.a];
+  battles.forEach((bt, i) => { bt.seed = seedBase + i * 7919; });
 
-/* ---------- 재생 루프 ---------- */
+  const instant = NET.role === 'off' && G.instant;
+  const live = [];
+  for (const bt of battles) {
+    bt.viewers = [];
+    if (bt.a.isHuman) bt.viewers.push([bt.a, 0]);
+    if (bt.b && bt.b.isHuman && !bt.ghost) bt.viewers.push([bt.b, 1]);
+    const sa = specOf(bt.a, { forceAuto: instant && bt.a.isHuman });
+    const sb = bt.b ? specOf(bt.b) : monsterSpec();
+    if (bt.viewers.length && !instant) { bt.B = createBattle(sa, sb, bt.seed); live.push(bt); }
+    else bt.B = runBattle(sa, sb, bt.seed);
+  }
+  G.phase = 'battle'; G.prepLeft = 0;
+  syncAll(); renderAll();
+  if (live.length) await W(liveRun(live), tok);
+  await W(finishRound(battles, tok), tok);
+}
+
+// 사람이 참여하는 전투들을 실시간으로 진행한다 (방장 컴퓨터가 모두 계산)
+function liveRun(list) {
+  return new Promise(res => {
+    LIVE.list = list.map(bt => ({ bt, B: bt.B, acc: 0, announced: false }));
+    LIVE.res = res; LIVE.endAt = 0; LIVE.last = performance.now();
+    for (const L of LIVE.list) {
+      const { bt } = L;
+      for (const [P, side] of bt.viewers) {
+        const opp = (side === 0 ? bt.b : bt.a);
+        if (P.id === MY_ID) {
+          UI.battle = L.B; UI.mySide = side; UI.flip = side === 1; UI.battleView = true;
+          UI.currentOppId = opp ? opp.id : null; UI.acc = 0; UI.aim = null;
+        } else netTo(P.id, { t: 'bstart', side, opp: opp ? opp.id : null });
+      }
+      dispatchEv(L);
+    }
+    renderAll();
+  });
+}
+// 한 틱의 결과를 화면 효과와 원격 관전자에게 전달
+function dispatchEv(L) {
+  const B = L.B;
+  if (B === UI.battle) pushEffects(B, B.ev);
+  if (NET.role === 'host') {
+    let snap = null;
+    for (const [P] of L.bt.viewers) if (P.id !== MY_ID && P.isHuman) {
+      snap = snap || snapBattle(B);
+      netTo(P.id, { t: 'tick', b: snap, ev: B.ev });
+    }
+  }
+  B.ev = [];
+}
+function liveFrame() {
+  if (!LIVE.list.length) return;
+  const now = performance.now();
+  const el = Math.min((now - LIVE.last) / 1000, NET.role === 'off' ? 0.1 : 5);
+  LIVE.last = now;
+  for (const L of LIVE.list) {
+    const B = L.B;
+    if (B.over) continue;
+    const mine = B === UI.battle;
+    const spd = NET.role === 'off' ? G.battleSpeed * (mine && UI.aim ? 0.25 : 1) : 1;
+    L.acc += el * spd;
+    let steps = 0;
+    while (L.acc >= CFG.TICK && steps < 60 && !B.over) { L.acc -= CFG.TICK; steps++; stepBattle(B); dispatchEv(L); }
+    if (B.over && !L.announced) {
+      L.announced = true;
+      if (mine) { cancelAim(); toast(B.result.winner === UI.mySide ? '승리!' : B.result.timeout ? '시간 초과' : '패배', B.result.winner === UI.mySide ? 'gold' : 'bad'); }
+      dispatchEv(L);
+    }
+  }
+  if (!LIVE.endAt && LIVE.list.every(L => L.B.over)) LIVE.endAt = now + 1100;
+  if (LIVE.endAt && now >= LIVE.endAt) { const r = LIVE.res; LIVE.endAt = 0; LIVE.res = null; r && r(); }
+}
+// 시계: Worker가 50ms마다 신호를 주면 전투와 타이머를 진행 (Worker를 못 쓰는 환경은 setInterval)
+(function startClock() {
+  const tick = () => { liveFrame(); pumpTimers(); };
+  try {
+    const url = URL.createObjectURL(new Blob(['setInterval(function(){postMessage(0)},50)'], { type: 'text/javascript' }));
+    const w = new Worker(url);
+    w.onmessage = tick;
+    w.onerror = () => setInterval(tick, 50);
+  } catch (e) { setInterval(tick, 50); }
+})();
+
+// 화면 그리기 루프 (전투 진행은 liveFrame이 맡는다)
 let lastBarUpdate = 0;
 function frame(now) {
-  const dt = Math.min(0.05, ((now - UI.lastFrame) / 1000) || 0.016);
-  UI.lastFrame = now; UI.frameDt = dt;
+  UI.frameDt = Math.min(0.05, ((now - UI.lastFrame) / 1000) || 0.016);
+  UI.lastFrame = now;
   const B = UI.battle;
-  if (B && UI.battleView && !B.over && !modalOpen()) {
-    UI.acc += dt * G.battleSpeed * (UI.aim ? 0.25 : 1);
-    let steps = 0;
-    while (UI.acc >= CFG.TICK && steps < 12 && !B.over) {
-      UI.acc -= CFG.TICK; steps++;
-      stepBattle(B);
-      pushEffects(B, B.ev); B.ev = [];
-    }
-    if (UI.aim && !spellReady(B.sides[0], UI.aim.slot) && !UI.aim.first) cancelAim();
-  }
-  if (B && B.over && UI.battleView && !UI.ending) {
-    UI.ending = true; cancelAim();
-    const w = B.result.winner;
-    toast(w === 0 ? '승리!' : B.result.timeout ? '시간 초과' : '패배', w === 0 ? 'gold' : 'bad');
-    setTimeout(finishRound, 1100);
-  }
+  if (B && UI.battleView && UI.aim && !B.over && !UI.aim.first && !spellReady(B.sides[UI.mySide], UI.aim.slot)) cancelAim();
   if (G) draw(now);
   if (G && UI.battleView && now - lastBarUpdate > 90) { lastBarUpdate = now; renderSpellBar(); }
   requestAnimationFrame(frame);
@@ -3287,19 +3509,16 @@ function pveRewards(P, won) {
   if (gold) { P.gold += gold; got.push(`🪙 ${gold}`); }
   const spellReward = (G.stage === 1 && G.round === 3) || (G.stage >= 2 && won);
   if (spellReward) {
-    if (P.isHuman) G.pendingSpellPick = true;
+    if (P.isHuman) P.pendingSpell = true;
     else { const ids = spellOffers(P, 3); if (ids.length) addSpell(P, aiPickSpell(P, ids)); }
     got.push('📜 새 주문');
   }
   return got.join(' · ');
 }
 
-function finishRound() {
-  if (!UI.pending) return;
-  const { battles, mb } = UI.pending;
+async function finishRound(battles, tok) {
   const base = stageBaseDamage(G.stage);
-  const others = [];
-  let info = null;
+  const infos = {}, lines = [];
   for (const bt of battles) {
     const res = bt.B.result;
     if (bt.pve) {
@@ -3307,7 +3526,8 @@ function finishRound() {
       const dmg = won ? 0 : Math.max(1, base + survivorDamage(res.survivors[1]));
       applyResult(bt.a, won, dmg, false, '중립 몬스터');
       const rw = pveRewards(bt.a, won);
-      if (bt === mb) info = { won, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw };
+      if (bt.a.isHuman) infos[bt.a.id] = { ...battleInfo(bt.B, 0), won, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: '중립 몬스터', rewards: rw, bt };
+      lines.push({ bt, text: `${bt.a.emoji} ${esc(bt.a.name)} → ${won ? '몬스터 처치' : '몬스터에게 패배'}` });
     } else {
       const w = res.winner;
       const draw = res.timeout || w === -1;
@@ -3315,42 +3535,46 @@ function finishRound() {
       const dB = draw ? Math.max(1, base) : base + survivorDamage(res.survivors[0]);
       applyResult(bt.a, w === 0, dA, true, bt.b.name);
       if (!bt.ghost) applyResult(bt.b, w === 1, dB, true, bt.a.name);
-      if (bt === mb) info = { won: w === 0, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost };
-      else {
-        const tag = draw ? '무승부' : `${(w === 0 ? bt.a : bt.b).emoji} 승`;
-        others.push(`${bt.a.emoji} ${esc(bt.a.name)} vs ${bt.b.emoji} ${esc(bt.b.name)}${bt.ghost ? '(유령)' : ''} → ${tag}`);
-      }
+      if (bt.a.isHuman) infos[bt.a.id] = { ...battleInfo(bt.B, 0), won: w === 0, dmg: bt.a.lastResult.dmg, timeout: res.timeout, oppName: bt.b.name, ghost: bt.ghost, bt };
+      if (bt.b.isHuman && !bt.ghost) infos[bt.b.id] = { ...battleInfo(bt.B, 1), won: w === 1, dmg: bt.b.lastResult.dmg, timeout: res.timeout, oppName: bt.a.name, bt };
+      const tag = draw ? '무승부' : `${(w === 0 ? bt.a : bt.b).emoji} 승`;
+      lines.push({ bt, text: `${bt.a.emoji} ${esc(bt.a.name)} vs ${bt.b.emoji} ${esc(bt.b.name)}${bt.ghost ? '(유령)' : ''} → ${tag}` });
     }
   }
-  if (battles[0].pve) others.push(...battles.filter(bt => bt !== mb).map(bt => `${bt.a.emoji} ${esc(bt.a.name)} → ${bt.B.result.winner === 0 ? '몬스터 처치' : '몬스터에게 패배'}`));
-  info.B = mb.B; info.others = others;
   G.phase = 'result';
-  renderAll();
-  const H = human();
-  const proceed = () => {
-    const out = processEliminations();
-    for (const P of out) toast(`${P.emoji} ${P.name} 탈락 (${P.place}위)`, 'bad');
-    const alive = G.players.filter(p => p.alive);
-    if (!H.alive || alive.length <= 1) {
-      G.over = true; G.phase = 'over';
-      stopBattle(); renderAll(); showGameOver(H);
-      return;
-    }
-    advanceRound();
-    saveGame();
-    beginRound();
-  };
-  showBattleResult(info, () => {
-    if (G.pendingSpellPick) {
-      G.pendingSpellPick = false;
-      showSpellPick(spellOffers(H, 3), id => { if (id) { addSpell(H, id); toast(`${SPELLS[id].icon} ${SPELLS[id].name} 획득`, 'gold'); } proceed(); });
-    } else proceed();
-  });
+  syncAll(); renderAll();
+
+  // 사람마다 결과를 보여 주고 주문 보상을 고르게 한다 (동시에 진행)
+  const jobs = [];
+  for (const P of G.players) {
+    if (!P.alive || !P.isHuman || !infos[P.id]) continue;
+    jobs.push((async () => {
+      const { bt, ...info } = infos[P.id];
+      info.others = lines.filter(l => l.bt !== bt).map(l => l.text);
+      await ask(P, 'result', info);
+      await humanSpellReward(P);
+      syncTo(P);
+    })());
+  }
+  await W(Promise.all(jobs), tok);
+
+  const out = processEliminations();
+  for (const P of out) toast(`${P.emoji} ${P.name} 탈락 (${P.place}위)`, 'bad');
+  const alive = G.players.filter(p => p.alive);
+  const over = alive.length <= 1 || !alive.some(p => p.isHuman);
+  if (over) { G.over = true; G.phase = 'over'; }
+  syncAll();
+  stopBattle(); renderAll();
+  for (const P of G.players) {
+    if (!P.isHuman || !(out.includes(P) || (over && P.alive))) continue;
+    if (P.id === MY_ID) showGameOver(P); else netTo(P.id, { t: 'over' });
+  }
 }
 
 /* ---------- 공용 선택 라운드 ---------- */
-function runCarousel() {
+async function carouselRound(tok) {
   const r = R();
+  G.phase = 'carousel';
   const alive = G.players.filter(P => P.alive);
   const n = alive.length + 1;
   const costs = G.stage <= 2 ? [1, 2] : G.stage === 3 ? [2, 3] : G.stage === 4 ? [3, 4] : [4, 5];
@@ -3360,15 +3584,15 @@ function runCarousel() {
     const cost = r.pick(costs);
     const ids = Object.keys(UNITS).filter(k => UNITS[k].cost === cost && G.pool[k] > 0);
     if (!ids.length) continue;
-    options.push({ kind: 'unit', defId: r.pick(ids), item: r.pick(COMP_KEYS) });
+    options.push({ kind: 'unit', defId: r.pick(ids), item: r.pick(COMP_KEYS), taken: false, takenBy: null });
   }
-  for (const id of r.shuffle(SPELL_KEYS.slice()).slice(0, nSpells)) options.push({ kind: 'spell', id });
+  for (const id of r.shuffle(SPELL_KEYS.slice()).slice(0, nSpells)) options.push({ kind: 'spell', id, taken: false, takenBy: null });
   r.shuffle(options);
   const order = r.shuffle(alive.slice()).sort((a, b) => a.hp - b.hp);
-  let idx = 0;
+  const st = { options, order: order.map(P => P.id), idx: 0 };
   const take = (P, i) => {
     const o = options[i];
-    o.taken = P;
+    o.taken = true; o.takenBy = P.id;
     if (o.kind === 'unit') {
       takeFromPool(o.defId, 1);
       P.items.push(o.item);
@@ -3377,38 +3601,34 @@ function runCarousel() {
       else { P.gold += UNITS[o.defId].cost; G.pool[o.defId]++; }
     } else if (!addSpell(P, o.id)) P.gold += 2;
   };
-  const render = () => {
-    const cur = order[idx];
-    openModal(`<h2>🎠 공용 선택</h2><p class="sub">체력이 낮은 군주부터 하나씩 고릅니다. ${cur ? (cur.isHuman ? '<b style="color:var(--gold)">당신의 차례입니다!</b>' : `${cur.emoji} ${esc(cur.name)} 고르는 중…`) : ''}</p>
-      <div class="queue">${order.map((P, i) => `<span class="${i < idx ? 'done' : i === idx ? 'now' : ''}" title="${esc(P.name)} (${P.hp})">${P.emoji}</span>`).join('')}</div>
-      <div class="carousel">${options.map((o, i) => {
-        const tk = o.taken ? `<div class="taken-by">${o.taken.emoji} 선택</div>` : '';
-        if (o.kind === 'unit') {
-          const d = UNITS[o.defId], it = COMPONENTS[o.item];
-          return `<div class="choice ${o.taken ? 'disabled' : ''}" data-c="${i}" style="border-color:${COST_COLOR[d.cost]}" data-tip="unit:${o.defId}:1">
-            <div class="ci">${d.emoji}</div><div class="cn">${d.name}</div><div class="cd">${d.cost}코스트 · ${it.icon} ${it.name}</div>${tk}</div>`;
-        }
-        const sp = SPELLS[o.id];
-        return `<div class="choice spellc ${o.taken ? 'disabled' : ''}" data-c="${i}" data-tip="spell:${o.id}:1"><div class="ci">${sp.icon}</div><div class="cn">${sp.name}</div><div class="cd">주문 · 마나 ${sp.cost}</div>${tk}</div>`;
-      }).join('')}</div>`, box => {
-      box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => {
-        const i = +el.dataset.c;
-        if (!order[idx] || !order[idx].isHuman || options[i].taken) return;
-        take(order[idx], i); idx++; render(); renderAll(); setTimeout(step, 350);
-      });
-    });
+  const show = () => {
+    netBroadcast({ t: 'carousel', st });
+    if (human().alive) showCarousel(st, i => FLOW.localPick && FLOW.localPick(i));
   };
-  const step = () => {
-    if (idx >= order.length) {
-      setTimeout(() => { closeModal(); advanceRound(); saveGame(); beginRound(); }, 700);
-      return;
+  syncAll(); renderAll();
+  for (let k = 0; k < order.length; k++) {
+    st.idx = k;
+    const cur = order[k];
+    show();
+    let pick;
+    if (!cur.isHuman) { await W(sleep(420), tok); pick = aiCarouselPick(cur, options); }
+    else {
+      const free = options.map((o, i) => i).filter(i => !options[i].taken);
+      const p = cur.id === MY_ID
+        ? new Promise(res => { FLOW.localPick = i => { FLOW.localPick = null; res(i); }; })
+        : netWaitPick(cur.id, 25000);
+      const v = await W(p, tok);
+      pick = free.includes(v) ? v : free[0];
     }
-    const cur = order[idx];
-    render();
-    if (cur.isHuman) return;
-    setTimeout(() => { take(cur, aiCarouselPick(cur, options)); idx++; render(); step(); }, 420);
-  };
-  step();
+    take(cur, pick);
+    syncAll(); renderAll();
+  }
+  st.idx = order.length;
+  show();
+  await W(sleep(700), tok);
+  netBroadcast({ t: 'carouselEnd' });
+  if ($('#modalBox').textContent.includes('공용 선택')) closeModal();
+  syncAll(); renderAll();
 }
 
 /* ===== 12-input.js ===== */
@@ -3438,7 +3658,9 @@ function unitAt(h) {
   if (h.r < 4) return null;
   return P.board.find(u => u.r === h.r - 4 && u.c === h.c) || null;
 }
-const boardEditable = () => G && G.phase === 'prep' && !UI.battleView;
+const boardEditable = () => G && G.phase === 'prep';
+// 화면(뒤집힌 보기 포함)의 칸 → 엔진 좌표
+const engineCell = h => ({ r: flipped() ? GROWS - 1 - h.r : h.r, c: flipped() ? GCOLS - 1 - h.c : h.c });
 
 /* ---------- 끌어놓기 ---------- */
 function beginDrag(e, payload, icon) {
@@ -3486,8 +3708,9 @@ window.addEventListener('pointermove', e => {
   UI.hover = h;
   if (UI.aim && UI.battle) {
     if (h && h.kind === 'board') {
-      const occ = UI.battle.occ[h.r][h.c];
-      UI.aimHover = { r: h.r, c: h.c, uid: occ || null };
+      const ec = engineCell(h);
+      const occ = UI.battle.occ[ec.r][ec.c];
+      UI.aimHover = { r: ec.r, c: ec.c, uid: occ || null };
     }
     return;
   }
@@ -3519,11 +3742,12 @@ window.addEventListener('pointerup', e => {
   if (drag.unit) {
     if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
       if (P.board.includes(drag.unit) && !boardEditable()) return;
+      if (NET.role === 'guest') { netAct('sell', { uid: drag.unit.uid }); return; }
       sellUnit(P, drag.unit); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
     }
     const [x, y] = canvasPoint(e);
     const h = hitTest(x, y);
-    if (h) moveUnit(P, drag.unit, drag.from, h);
+    if (h) { if (NET.role === 'guest') netAct('move', { uid: drag.unit.uid, to: h }); moveUnit(P, drag.unit, drag.from, h); }
     renderAll();
     return;
   }
@@ -3539,11 +3763,11 @@ window.addEventListener('pointerup', e => {
 });
 
 // 보관함 아이템 → 유닛 장착 (끌어놓기와 탭 공용)
-function equipFromInventory(u, idx) {
-  const P = human();
+function equipFromInventory(u, idx, P = human()) {
+  if (NET.role === 'guest') { UI.selItem = null; netAct('equip', { uid: u.uid, idx }); return; }
   const it = P.items[idx];
   if (it == null) return;
-  if (equipItem(u, it)) { P.items.splice(idx, 1); UI.selItem = null; toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
+  if (equipItem(u, it)) { P.items.splice(idx, 1); if (P === human()) UI.selItem = null; toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
   else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
 }
 // 유닛을 탭: 선택된 아이템이 있으면 장착, 없으면 유닛 정보 창(장비 해제·판매)
@@ -3557,6 +3781,7 @@ function tapUnit(u) {
   showUnitPanel(u);
 }
 function unequipItem(P, u, i) {
+  if (NET.role === 'guest') { netAct('unequip', { uid: u.uid, i }); return; }
   const it = u.items.splice(i, 1)[0];
   if (it != null) P.items.push(it);
 }
@@ -3613,14 +3838,15 @@ $('#shop').addEventListener('click', e => {
   if (!el || !G || !human().alive || G.phase === 'over') return;
   const P = human();
   const id = P.shop[+el.dataset.shop];
+  if (NET.role === 'guest') { netAct('buy', { slot: +el.dataset.shop }); return; }
   if (!buyUnit(P, +el.dataset.shop)) {
     if (id && P.gold < UNITS[id].cost) toast('골드가 부족합니다', 'bad');
     else if (id) toast('대기석이 가득 찼습니다', 'bad');
   }
   renderAll();
 });
-$('#btnXp').onclick = () => { if (G && G.phase === 'prep' && buyXp(human())) renderAll(); };
-$('#btnRoll').onclick = () => { if (G && G.phase !== 'over' && reroll(human())) renderAll(); };
+$('#btnXp').onclick = () => { if (G && G.phase === 'prep') { if (NET.role === 'guest') netAct('xp'); else if (buyXp(human())) renderAll(); } };
+$('#btnRoll').onclick = () => { if (G && G.phase !== 'over') { if (NET.role === 'guest') netAct('roll'); else if (reroll(human())) renderAll(); } };
 $('#btnReady').onclick = onReady;
 $('#btnSpellbook').onclick = () => G && showSpellbook();
 $('#btnHelp').onclick = () => showHelp();
@@ -3628,12 +3854,13 @@ $('#btnMenu').onclick = () => G && showMenu();
 $('#btnSpeed').onclick = cycleSpeed;
 function cycleSpeed() {
   if (!G) return;
+  if (NET.role !== 'off') { toast('온라인 대결은 실시간으로만 진행됩니다'); return; }
   if (G.instant) { G.instant = false; G.battleSpeed = 1; }
   else if (G.battleSpeed === 1) G.battleSpeed = 2;
   else G.instant = true;
   // 즉시 결과로 바꾸면 진행 중 전투도 자동 시전으로 즉시 마무리
   if (G.instant && UI.battle && UI.battleView && !UI.battle.over) {
-    UI.battle.sides[0].forceAuto = true;
+    UI.battle.sides[UI.mySide].forceAuto = true;
     UI.battle.headless = true;
     cancelAim();
     let guard = 0;
@@ -3669,7 +3896,7 @@ document.addEventListener('mouseout', e => {
 function startAim(i) {
   const B = UI.battle;
   if (!B || B.over) return;
-  const S = B.sides[0];
+  const S = B.sides[UI.mySide];
   const sl = S.spells[i];
   if (!sl) return;
   if (!spellReady(S, i)) {
@@ -3677,7 +3904,7 @@ function startAim(i) {
     return;
   }
   const sp = SPELLS[sl.id];
-  if (sp.target === 'none') { queueSpell(B, 0, i, {}); cancelAim(); return; }
+  if (sp.target === 'none') { castNow(i, {}); cancelAim(); return; }
   UI.aim = { slot: i, first: null };
   UI.aimHover = null; UI.tabIdx = -1;
   updateAimHint();
@@ -3689,27 +3916,28 @@ function cancelAim() {
 }
 function updateAimHint() {
   if (!UI.aim) { $('#aimHint').textContent = ''; return; }
-  const sp = SPELLS[UI.battle.sides[0].spells[UI.aim.slot].id];
+  const sp = SPELLS[UI.battle.sides[UI.mySide].spells[UI.aim.slot].id];
   const t = {
     ally: '아군 유닛을 선택', enemy: '적 유닛을 선택', row: '가로 줄을 선택', cell: '범위 중심 칸을 선택',
     ally2: UI.aim.first ? '맞바꿀 두 번째 아군 선택' : '첫 번째 아군 선택', allyCell: UI.aim.first ? '이동할 빈 칸 선택' : '이동시킬 아군 선택',
   }[sp.target];
-  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (0.25배속 · Tab 순환 · Enter 시전 · Esc 취소)`;
+  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (${NET.role === 'off' ? '0.25배속 · ' : ''}Tab 순환 · Enter 시전 · Esc 취소)`;
 }
 function aimClick(h) {
   if (!h || h.kind !== 'board') return;
   const B = UI.battle;
-  const occ = B.occ[h.r][h.c];
-  UI.aimHover = { r: h.r, c: h.c, uid: occ || null };
+  const ec = engineCell(h);
+  const occ = B.occ[ec.r][ec.c];
+  UI.aimHover = { r: ec.r, c: ec.c, uid: occ || null };
   confirmAim();
 }
 function confirmAim() {
   const B = UI.battle, a = UI.aim, hv = UI.aimHover;
   if (!B || !a || !hv) return;
-  const S = B.sides[0];
+  const S = B.sides[UI.mySide];
   const sp = SPELLS[S.spells[a.slot].id];
   const u = hv.uid ? unitByUid(B, hv.uid) : null;
-  const ally = u && u.side === 0 && targetable(u), foe = u && u.side === 1 && targetable(u);
+  const ally = u && u.side === UI.mySide && targetable(u), foe = u && u.side !== UI.mySide && targetable(u);
   let target = null;
   switch (sp.target) {
     case 'ally': if (ally) target = { uid: u.uid }; break;
@@ -3727,14 +3955,19 @@ function confirmAim() {
       break;
   }
   if (!target) { toast('올바른 대상이 아닙니다', 'bad'); return; }
-  queueSpell(B, 0, a.slot, target);
+  castNow(a.slot, target);
   cancelAim();
+}
+// 주문 시전: 혼자·방장은 엔진에 바로 입력, 손님은 방장에게 요청
+function castNow(slot, target) {
+  if (NET.role === 'guest') netSend({ t: 'cast', slot, target });
+  else queueSpell(UI.battle, UI.mySide, slot, target);
 }
 // Tab: 유효한 대상을 순환
 function aimCandidates() {
   const B = UI.battle, a = UI.aim;
-  const sp = SPELLS[B.sides[0].spells[a.slot].id];
-  const allies = B.units.filter(u => u.side === 0 && targetable(u)), foes = B.units.filter(u => u.side === 1 && targetable(u));
+  const sp = SPELLS[B.sides[UI.mySide].spells[a.slot].id];
+  const allies = B.units.filter(u => u.side === UI.mySide && targetable(u)), foes = B.units.filter(u => u.side !== UI.mySide && targetable(u));
   const asHover = u => ({ r: u.r, c: u.c, uid: u.uid });
   switch (sp.target) {
     case 'ally': return allies.map(asHover);
@@ -3744,7 +3977,7 @@ function aimCandidates() {
     case 'allyCell': {
       if (!a.first) return allies.map(asHover);
       const c = [];
-      for (let r = 4; r < GROWS; r++) for (let cc = 0; cc < GCOLS; cc++) if (!B.occ[r][cc]) c.push({ r, c: cc, uid: null });
+      for (let r = UI.mySide === 0 ? 4 : 0; r < (UI.mySide === 0 ? GROWS : 4); r++) for (let cc = 0; cc < GCOLS; cc++) if (!B.occ[r][cc]) c.push({ r, c: cc, uid: null });
       return c;
     }
   }
@@ -3781,9 +4014,380 @@ window.addEventListener('keydown', e => {
   else if (k === 'h') showHelp();
   else if (k === 'e') {
     const u = unitAt(UI.hover);
-    if (u && (!human().board.includes(u) || boardEditable())) { sellUnit(human(), u); toast(`판매 +${sellPrice(u)}🪙`); hideTip(); renderAll(); }
+    if (u && NET.role === 'guest' && (!human().board.includes(u) || boardEditable())) { netAct('sell', { uid: u.uid }); hideTip(); }
+    else if (u && (!human().board.includes(u) || boardEditable())) { sellUnit(human(), u); toast(`판매 +${sellPrice(u)}🪙`); hideTip(); renderAll(); }
   }
 });
+
+/* ===== 12-net.js ===== */
+/* =====================================================================
+ * 12. 온라인 대결 — 방(로비), 메시지 전달, 방장 권위 방식 동기화
+ *   - 게임 규칙은 방장의 브라우저가 모두 계산한다 (유닛 풀, AI 군주, 전투).
+ *   - 손님은 '행동'(구매·배치·주문 등)을 방장에게 보내고, 돌아온 게임 상태를 그대로 그린다.
+ *   - 전투는 방장이 진행하면서 매 틱의 스냅샷을 참가자에게 보낸다. 손님은 그 스냅샷으로
+ *     전투 객체를 다시 만들어(mirrorBattle) 같은 화면 코드로 그린다.
+ *   - 서버(server/server.js)는 방을 만들고 메시지를 전달할 뿐 게임 내용을 모른다.
+ * ===================================================================== */
+
+const NET_DEFAULT_SERVER = ''; // 배포한 중계 서버 주소(wss://...). 비워 두면 접속 화면에서 직접 입력
+const NET = {
+  role: 'off',               // 'off' 혼자 | 'host' 방장 | 'guest' 손님
+  ws: null, code: '', slot: 0, peers: {}, lobby: {}, difficulty: 'normal',
+  pidOfSlot: {}, slotOfPid: {},   // 방 슬롯 ↔ 게임 속 플레이어 번호
+  waiters: {}, nextId: 1, pickWait: null, capture: null, inLobby: false,
+};
+
+function netServerUrl() {
+  try {
+    const q = new URLSearchParams(location.search).get('server');
+    if (q) return q;
+    return localStorage.getItem('slt.server') || NET_DEFAULT_SERVER;
+  } catch (e) { return NET_DEFAULT_SERVER; }
+}
+function netStore(k, v) { try { if (v === undefined) return localStorage.getItem('slt.' + k) || ''; localStorage.setItem('slt.' + k, v); } catch (e) { /* 저장 불가 */ } return ''; }
+
+/* ---------- 연결 ---------- */
+function netOpen(url, first) {
+  return new Promise((resolve, reject) => {
+    let ws;
+    try { ws = new WebSocket(url); } catch (e) { return reject(new Error('서버 주소가 올바르지 않습니다.')); }
+    let settled = false;
+    const fail = msg => { if (settled) return; settled = true; clearTimeout(timer); try { ws.close(); } catch (e) { /* 무시 */ } reject(new Error(msg)); };
+    const timer = setTimeout(() => fail('서버에 연결할 수 없습니다 (시간 초과).'), 8000);
+    ws.onopen = () => ws.send(JSON.stringify(first));
+    ws.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (!settled) {
+        if (m.t === 'hello') { settled = true; clearTimeout(timer); NET.ws = ws; resolve(m); }
+        else if (m.t === 'error') fail(m.msg);
+        return;
+      }
+      netOnMsg(m);
+    };
+    ws.onerror = () => fail('서버에 연결할 수 없습니다.');
+    ws.onclose = () => { if (!settled) fail('서버에 연결할 수 없습니다.'); else if (NET.ws === ws) netClosed('서버와 연결이 끊겼습니다.'); };
+  });
+}
+function netRaw(o) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(o)); }
+const netSend = d => { if (NET.role === 'guest') netRaw({ t: 'to', d }); };                         // 손님 → 방장
+const netBroadcast = d => { if (NET.role === 'host') netRaw({ t: 'to', to: 'all', d }); };          // 방장 → 모두
+function netTo(pid, d) { if (NET.role !== 'host') return; const s = NET.slotOfPid[pid]; if (s != null) netRaw({ t: 'to', to: s, d }); }
+function netAct(a, p) { netSend({ t: 'act', a, p: p || {} }); return true; }
+
+function netLeave() {
+  const ws = NET.ws;
+  NET.ws = null; NET.role = 'off'; NET.code = ''; NET.peers = {}; NET.lobby = {}; NET.inLobby = false;
+  NET.pidOfSlot = {}; NET.slotOfPid = {}; NET.pickWait = null;
+  for (const id in NET.waiters) NET.waiters[id].res(null);
+  NET.waiters = {};
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) { /* 무시 */ } }
+}
+function netClosed(reason) {
+  const wasInGame = !!G;
+  netLeave();
+  FLOW.token++;
+  cancelTimer(FLOW.iv);
+  stopBattle();
+  G = null; MY_ID = 0;
+  openModal(`<h2>연결 종료</h2><p class="sub">${esc(reason)}</p><div class="row-btns"><button class="primary" id="ncOk">${wasInGame ? '시작 화면으로' : '확인'}</button></div>`,
+    box => { box.querySelector('#ncOk').onclick = showTitle; });
+}
+
+/* ---------- 원격 플레이어에게 묻고 기다리기 ---------- */
+function netPrompt(pid, kind, data, ms) {
+  return new Promise(res => {
+    const id = NET.nextId++;
+    const timer = later(ms, () => { delete NET.waiters[id]; res(null); });
+    NET.waiters[id] = { pid, res: v => { cancelTimer(timer); delete NET.waiters[id]; res(v); } };
+    netTo(pid, { t: 'prompt', id, kind, data });
+  });
+}
+function netWaitPick(pid, ms) {
+  return new Promise(res => {
+    const timer = later(ms, () => { NET.pickWait = null; res(null); });
+    NET.pickWait = { pid, res: v => { cancelTimer(timer); NET.pickWait = null; res(v); } };
+  });
+}
+function cancelWaiters(pid) {
+  for (const id in NET.waiters) if (NET.waiters[id].pid === pid) NET.waiters[id].res(null);
+  if (NET.pickWait && NET.pickWait.pid === pid) NET.pickWait.res(null);
+}
+
+/* ---------- 상태 동기화 (방장 → 손님) ---------- */
+function syncTo(P, extra) { if (NET.role === 'host') netTo(P.id, { t: 'state', g: G, ...extra }); }
+function syncAll() { if (NET.role === 'host') for (const P of G.players) if (P.isHuman && P.id !== MY_ID) syncTo(P); }
+function netReadyInfo() {
+  if (!G || G.phase !== 'prep') return;
+  const hs = G.players.filter(p => p.alive && p.isHuman);
+  G.readyInfo = [hs.filter(p => p.ready).length, hs.length];
+  netBroadcast({ t: 'timer', left: G.prepLeft, rd: G.readyInfo });
+  renderTop();
+}
+
+/* ---------- 메시지 처리 ---------- */
+function netOnMsg(m) {
+  if (m.t === 'peer') {
+    if (m.joined) { NET.peers[m.slot] = { name: m.name }; if (NET.role === 'host') { NET.lobby[m.slot] = { lord: 'war' }; lobbyBroadcast(); } }
+    else { delete NET.peers[m.slot]; if (NET.role === 'host') { delete NET.lobby[m.slot]; onPeerGone(m.slot); lobbyBroadcast(); } }
+    if (NET.inLobby) showLobby();
+  } else if (m.t === 'closed') netClosed(m.reason || '방이 닫혔습니다.');
+  else if (m.t === 'error') toast(m.msg, 'bad');
+  else if (m.t === 'from') { if (NET.role === 'host') onHostMsg(m.from, m.d || {}); else onGuestMsg(m.d || {}); }
+}
+
+/* ----- 방장이 받는 메시지 ----- */
+function findUnitOf(P, uid) { return allUnits(P).find(u => u.uid === uid); }
+const ACTS = {
+  buy: (P, p) => {
+    const slot = p.slot | 0, id = P.shop[slot];
+    if (!buyUnit(P, slot)) { if (id && P.gold < UNITS[id].cost) toast('골드가 부족합니다', 'bad'); else if (id) toast('대기석이 가득 찼습니다', 'bad'); }
+  },
+  sell: (P, p) => {
+    const u = findUnitOf(P, p.uid);
+    if (!u || (P.board.includes(u) && !boardEditable())) return;
+    toast(`판매 +${sellPrice(u)}🪙`); sellUnit(P, u);
+  },
+  xp: P => { if (G.phase === 'prep') buyXp(P); },
+  roll: P => { reroll(P); },
+  move: (P, p) => {
+    const u = findUnitOf(P, p.uid), to = p.to;
+    if (!u || !to || (to.kind !== 'board' && to.kind !== 'bench')) return;
+    moveUnit(P, u, null, { kind: to.kind, r: to.r | 0, c: to.c | 0, i: clamp(to.i | 0, 0, CFG.BENCH - 1) });
+  },
+  equip: (P, p) => {
+    const u = findUnitOf(P, p.uid);
+    if (!u) return;
+    if (P.board.includes(u) && !boardEditable()) { toast('전투 중에는 보드 유닛에 장착할 수 없습니다', 'bad'); return; }
+    equipFromInventory(u, p.idx | 0, P);
+  },
+  unequip: (P, p) => {
+    const u = findUnitOf(P, p.uid);
+    if (u && (!P.board.includes(u) || boardEditable())) unequipItem(P, u, p.i | 0);
+  },
+  eqSpell: (P, p) => { if (G.phase === 'prep' && P.spells[p.i | 0]) toggleEquip(P, p.i | 0); },
+  upSpell: (P, p) => { if (G.phase === 'prep' && P.spells[p.i | 0]) upgradeSpell(P, p.i | 0); },
+  rule: (P, p) => {
+    const s = P.spells[p.i | 0];
+    if (s && G.phase === 'prep' && (p.v === 'off' || SPELLS[s.id].auto.includes(p.v))) s.rule = p.v;
+  },
+  ready: P => { if (G.phase === 'prep') { P.ready = true; if (FLOW.checkReady) FLOW.checkReady(); } },
+};
+
+function onHostMsg(slot, d) {
+  if (d.t === 'lord') { // 로비에서 군주 유형 선택
+    if (NET.lobby[slot] && LORD_TYPES[d.lord]) { NET.lobby[slot].lord = d.lord; lobbyBroadcast(); if (NET.inLobby) showLobby(); }
+    return;
+  }
+  const pid = NET.pidOfSlot[slot];
+  const P = G && pid != null ? G.players[pid] : null;
+  if (!P || !P.isHuman) return;
+  if (d.t === 'act') {
+    if (!P.alive || G.over || typeof ACTS[d.a] !== 'function') return;
+    const toasts = [];
+    NET.capture = toasts; // 이 행동이 만든 알림은 방장 화면이 아니라 그 손님에게 보낸다
+    try { ACTS[d.a](P, d.p || {}); } finally { NET.capture = null; }
+    syncTo(P, { toasts });
+    if (P.id === MY_ID) renderAll();
+    renderPlayers();
+  } else if (d.t === 'reply') {
+    const w = NET.waiters[d.id];
+    if (w && w.pid === pid) w.res(d.v);
+  } else if (d.t === 'pick') {
+    if (NET.pickWait && NET.pickWait.pid === pid) NET.pickWait.res(d.i | 0);
+  } else if (d.t === 'cast') {
+    const L = LIVE.list.find(x => x.bt.viewers.some(([q]) => q.id === pid));
+    if (!L || L.B.over) return;
+    const side = L.bt.viewers.find(([q]) => q.id === pid)[1];
+    const t = d.target && typeof d.target === 'object' ? d.target : {};
+    const target = {};
+    for (const k of ['uid', 'uid2', 'r', 'c']) if (Number.isFinite(t[k])) target[k] = t[k];
+    queueSpell(L.B, side, d.slot | 0, target);
+  }
+}
+
+// 게임 도중 손님이 나가면 AI가 그 군주를 이어받는다
+function onPeerGone(slot) {
+  const pid = NET.pidOfSlot[slot];
+  if (pid == null || !G) return;
+  const P = G.players[pid];
+  delete NET.slotOfPid[pid];
+  if (!P || !P.isHuman) return;
+  P.isHuman = false; P.ready = true; P.pendingSpell = false;
+  cancelWaiters(pid);
+  toast(`${P.name} 연결 끊김 — AI가 대신 플레이합니다`, 'bad');
+  if (FLOW.checkReady) FLOW.checkReady();
+  renderAll();
+}
+
+/* ----- 손님이 받는 메시지 ----- */
+function onGuestMsg(d) {
+  switch (d.t) {
+    case 'lobby':
+      NET.peers = d.peers; NET.lobby = d.lobby; NET.difficulty = d.diff;
+      if (NET.inLobby) showLobby();
+      break;
+    case 'start':
+      NET.inLobby = false; MY_ID = d.myId; G = null; closeModal(); stopBattle();
+      break;
+    case 'state': {
+      const prevPhase = G && G.phase;
+      G = d.g;
+      if (G.phase === 'prep' || G.phase === 'augment' || G.phase === 'carousel') { if (UI.battleView) stopBattle(); }
+      renderAll();
+      for (const [msg, kind] of (d.toasts || [])) toast(msg, kind);
+      if (G.phase === 'prep' && prevPhase !== 'prep') toast(`${roundLabel()} 준비 단계`);
+      break;
+    }
+    case 'timer': if (G) { G.prepLeft = d.left; G.readyInfo = d.rd; renderTop(); } break;
+    case 'prompt': showPrompt(d.kind, d.data, v => netSend({ t: 'reply', id: d.id, v })); break;
+    case 'carousel':
+      if (G && human().alive) showCarousel(d.st, i => netSend({ t: 'pick', i }));
+      break;
+    case 'carouselEnd': if ($('#modalBox').textContent.includes('공용 선택')) closeModal(); break;
+    case 'bstart':
+      UI.mySide = d.side; UI.flip = d.side === 1; UI.battleView = true; UI.currentOppId = d.opp; UI.battle = null; UI.aim = null; UI.announced = false;
+      renderAll();
+      break;
+    case 'tick': {
+      const B = mirrorBattle(d.b);
+      UI.battle = B;
+      pushEffects(B, d.ev || []);
+      if (B.over && !UI.announced) {
+        UI.announced = true; cancelAim();
+        toast(B.result.winner === UI.mySide ? '승리!' : B.result.timeout ? '시간 초과' : '패배', B.result.winner === UI.mySide ? 'gold' : 'bad');
+      }
+      break;
+    }
+    case 'over': if (G) { stopBattle(); showGameOver(human()); } break;
+  }
+}
+
+/* ---------- 전투 스냅샷 (방장 → 손님) ---------- */
+function snapBattle(B) {
+  const r1 = x => Math.round(x * 10) / 10;
+  return {
+    k: B.tick, over: B.over, w: B.result ? B.result.winner : null, to: B.result ? B.result.timeout : false,
+    z: B.zones.map(z => ({ side: z.side, row: z.row, t: r1(z.t) })),
+    u: B.units.filter(u => u.alive || u.ghost > 0 || u.reviving > 0).map(u => ({
+      i: u.uid, s: u.side, d: u.defId, st: u.star, it: u.items, r: u.r, c: u.c, fr: u.fr, fc: u.fc,
+      hp: r1(u.hp), mh: r1(u.maxHp), mn: r1(u.mana), mm: u.manaMax, a: u.alive ? 1 : 0, g: r1(u.ghost), rv: r1(u.reviving),
+      sn: r1(u.stun), fz: r1(u.freeze), ud: r1(u.undying), tt: r1(u.taunt), mc: r1(u.moveCd), md: r1(u.moveDur),
+      sh: u.shields.map(s => Math.round(s.amt)), bn: u.burn ? 1 : 0, sl: u.slows.map(s => [r1(s.v), s.move ? 1 : 0]), sd: u.sunder ? r1(u.sunder.amp) : 0,
+      atk: r1(u.atk), as: u.as, ab: r1(u.asBonus), ar: Math.round(u.armor), mr: Math.round(u.mr), bf: u.buffs.map(b => [b.stat, r1(b.v)]),
+      fx: [...u.fx], rg: u.range, cr: r1(u.crit),
+    })),
+    sd: B.sides.map(S => ({
+      lm: r1(S.lm), mx: S.lmMax, lt: S.lordType, cc: S.castCount, ag: [...S.aug], nm: S.name, em: S.emoji,
+      sp: S.spells.map(s => ({ id: s.id, lvl: s.lvl, cd: r1(s.cd), used: s.used, rule: s.rule })),
+    })),
+  };
+}
+// 스냅샷으로 화면 코드가 읽는 필드만 갖춘 전투 객체를 만든다 (시뮬레이션은 하지 않음)
+function mirrorBattle(s) {
+  const B = {
+    tick: s.k, over: s.over, result: s.over ? { winner: s.w, timeout: s.to } : null, zones: s.z, units: [],
+    occ: Array.from({ length: GROWS }, () => new Array(GCOLS).fill(0)), ev: [], log: [], headless: true,
+  };
+  for (const o of s.u) {
+    const d = unitDef(o.d);
+    const u = {
+      uid: o.i, side: o.s, defId: o.d, d, star: o.st, items: o.it, r: o.r, c: o.c, fr: o.fr, fc: o.fc,
+      hp: o.hp, maxHp: o.mh, mana: o.mn, manaMax: o.mm, alive: !!o.a, ghost: o.g, reviving: o.rv,
+      stun: o.sn, freeze: o.fz, undying: o.ud, taunt: o.tt, moveCd: o.mc, moveDur: o.md,
+      shields: o.sh.map(a => ({ amt: a })), burn: o.bn ? { dps: 0 } : null, slows: o.sl.map(([v, m]) => ({ v, move: !!m })), sunder: o.sd ? { amp: o.sd } : null,
+      atk: o.atk, as: o.as, asBonus: o.ab, asStacks: 0, armor: o.ar, mr: o.mr, buffs: o.bf.map(([stat, v]) => ({ stat, v })),
+      fx: new Set(o.fx), range: o.rg, crit: o.cr, traits: d.traits || [], summon: !!d.summon, sx: 0, sy: 0,
+    };
+    B.units.push(u);
+    if (u.alive) B.occ[u.r][u.c] = u.uid;
+  }
+  B.sides = s.sd.map((x, idx) => ({ idx, lm: x.lm, lmMax: x.mx, lordType: x.lt, castCount: x.cc, aug: new Set(x.ag), name: x.nm, emoji: x.em, spells: x.sp, stats: {} }));
+  return B;
+}
+
+/* ---------- 로비 화면 ---------- */
+function lobbyBroadcast() {
+  netBroadcast({ t: 'lobby', peers: NET.peers, lobby: NET.lobby, diff: NET.difficulty });
+}
+function lobbyOrder() { return Object.keys(NET.peers).map(Number).sort((a, b) => a - b); }
+
+function showOnlineMenu() {
+  const nick = netStore('name') || '';
+  const url = netServerUrl();
+  openModal(`<h2>🌐 온라인 대결</h2>
+    <p class="sub">같은 방에 최대 8명이 들어와 서로 겨룹니다. 남는 자리는 AI 군주가 채웁니다. 방 만들기는 방장의 컴퓨터가 게임을 진행하므로, 방장은 게임이 끝날 때까지 창을 닫지 마세요.</p>
+    <div class="field"><label>서버 주소</label><input id="onUrl" style="flex:1;min-width:220px" placeholder="wss://내서버.onrender.com" value="${esc(url)}"></div>
+    <div class="field"><label>닉네임</label><input id="onName" maxlength="12" placeholder="군주" value="${esc(nick)}"></div>
+    <div id="onErr" style="color:var(--red);font-size:13px;min-height:18px"></div>
+    <div class="field"><label>방 만들기</label><button class="primary" id="onCreate">방 만들기</button></div>
+    <div class="field"><label>코드로 입장</label><input id="onCode" maxlength="4" placeholder="ABCD" style="width:90px;text-transform:uppercase"><button id="onJoin">입장</button></div>
+    <div class="row-btns"><button id="onBack">뒤로</button></div>`, box => {
+    const err = m => { box.querySelector('#onErr').textContent = m || ''; };
+    const params = () => {
+      const u = box.querySelector('#onUrl').value.trim(), n = box.querySelector('#onName').value.trim() || '군주';
+      if (!/^wss?:\/\//i.test(u)) { err('서버 주소는 wss:// 또는 ws:// 로 시작해야 합니다. (서버는 README의 안내대로 직접 배포하세요)'); return null; }
+      netStore('server', u); netStore('name', n);
+      return { u, n };
+    };
+    const go = async (first, role) => {
+      const p = params(); if (!p) return;
+      err('연결 중…');
+      box.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      try {
+        const m = await netOpen(p.u, { ...first, name: p.n });
+        NET.role = role; NET.code = m.code; NET.slot = m.slot; NET.difficulty = 'normal';
+        NET.peers = {}; for (const x of m.peers) NET.peers[x.slot] = { name: x.name };
+        NET.lobby = {}; if (role === 'host') NET.lobby[0] = { lord: 'war' };
+        showLobby();
+      } catch (e) {
+        err(e.message); box.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      }
+    };
+    box.querySelector('#onCreate').onclick = () => go({ t: 'create' }, 'host');
+    box.querySelector('#onJoin').onclick = () => go({ t: 'join', code: box.querySelector('#onCode').value.trim() }, 'guest');
+    box.querySelector('#onBack').onclick = showTitle;
+  });
+}
+
+function showLobby() {
+  NET.inLobby = true;
+  const host = NET.role === 'host';
+  const slots = lobbyOrder();
+  const me = (NET.lobby[NET.slot] || {}).lord || 'war';
+  const rows = slots.map((s, i) => {
+    const L = NET.lobby[s] ? LORD_TYPES[NET.lobby[s].lord] : null;
+    return `<div class="prow ${s === NET.slot ? 'me' : ''}"><div class="pe">${HUMAN_EMOJIS[i]}</div><div class="pm"><div class="pn">${esc((NET.peers[s] || {}).name || '?')} ${s === 0 ? '👑' : ''}</div></div><div class="pv" style="width:auto">${L ? L.icon + ' ' + L.name : ''}</div></div>`;
+  }).join('');
+  openModal(`<h2>방 코드 <span style="letter-spacing:.2em;color:var(--text)">${esc(NET.code)}</span></h2>
+    <p class="sub">친구에게 이 코드를 알려 주세요. 현재 ${slots.length}명 · 남는 ${8 - slots.length}자리는 AI 군주가 채웁니다.</p>
+    <div id="lobbyRows">${rows}</div>
+    <h3 class="mt">내 군주 유형</h3>
+    <div class="choice-grid">${Object.entries(LORD_TYPES).map(([k, L]) => `<div class="choice ${k === me ? 'sel' : ''}" data-lord="${k}"><div class="ci">${L.icon}</div><div class="cn">${L.name}</div><div class="cd">${L.passive}</div></div>`).join('')}</div>
+    ${host ? `<div class="field"><label>AI 난이도</label><div class="seg" id="lbDiff">${Object.entries(DIFFICULTY).map(([k, D]) => `<button data-diff="${k}" class="${k === NET.difficulty ? 'on' : ''}">${D.name}</button>`).join('')}</div></div>` : `<p class="sub" style="margin-top:12px">방장이 시작하기를 기다리는 중… (AI 난이도: ${DIFFICULTY[NET.difficulty].name})</p>`}
+    <div class="row-btns"><button id="lbLeave">나가기</button>${host ? `<button class="primary" id="lbStart" ${slots.length < 2 ? 'disabled' : ''}>${slots.length < 2 ? '2명 이상 모이면 시작' : '게임 시작'}</button>` : ''}</div>`, box => {
+    box.querySelectorAll('[data-lord]').forEach(el => el.onclick = () => {
+      const lord = el.dataset.lord;
+      if (host) { NET.lobby[0].lord = lord; lobbyBroadcast(); showLobby(); } else netSend({ t: 'lord', lord });
+    });
+    box.querySelectorAll('[data-diff]').forEach(el => el.onclick = () => { NET.difficulty = el.dataset.diff; lobbyBroadcast(); showLobby(); });
+    box.querySelector('#lbLeave').onclick = () => { netLeave(); showTitle(); };
+    const st = box.querySelector('#lbStart');
+    if (st) st.onclick = hostStartGame;
+  });
+}
+
+function hostStartGame() {
+  const slots = lobbyOrder();
+  if (slots.length < 2) return;
+  NET.inLobby = false;
+  const humans = slots.map(s => ({ name: NET.peers[s].name, lordType: (NET.lobby[s] || {}).lord || 'war', slot: s }));
+  NET.pidOfSlot = {}; NET.slotOfPid = {};
+  humans.forEach((h, pid) => { NET.pidOfSlot[h.slot] = pid; NET.slotOfPid[pid] = h.slot; });
+  netRaw({ t: 'lock', v: true });
+  closeModal();
+  humans.forEach((h, pid) => { if (pid !== 0) netTo(pid, { t: 'start', myId: pid }); });
+  startNewGame({ humans, difficulty: NET.difficulty, seed: 0 });
+}
 
 /* ===== 13-sim.js ===== */
 /* =====================================================================
