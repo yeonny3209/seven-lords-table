@@ -35,7 +35,7 @@ GitHub Pages는 정적 호스팅이라 WebSocket 서버를 돌릴 수 없어서,
 1. Render에서 **New → Blueprint** → 이 저장소 연결 (`render.yaml`을 자동으로 읽음). 직접 만든다면 Web Service, Root Directory `server`, Build `npm install`, Start `npm start`.
 2. 배포가 끝나면 `https://이름.onrender.com` 주소가 생깁니다. 게임에서는 이걸 `wss://이름.onrender.com` 으로 입력합니다 (https 페이지에서는 `wss://`만 연결됩니다).
 3. 접속 화면의 '서버 주소'에 한 번 입력하면 브라우저가 기억합니다. 친구에게는 주소를 미리 채운 링크를 보내면 편합니다: `https://yeonny3209.github.io/seven-lords-table/?server=wss://이름.onrender.com`
-4. 주소를 코드에 고정하려면 `src/12-net.js`의 `NET_DEFAULT_SERVER`에 넣고 `node build.js`.
+4. 기본 서버는 `src/12-net.js`의 `NET_DEFAULT_SERVER`(현재 `wss://seven-lords-table.onrender.com`)입니다. 바꾸려면 이 값을 고치고 `node build.js`.
 
 무료 플랜은 한동안 쓰지 않으면 잠들어서 첫 접속이 30~60초 걸릴 수 있습니다. 내 컴퓨터에서 시험하려면:
 

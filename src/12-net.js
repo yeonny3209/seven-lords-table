@@ -7,7 +7,7 @@
  *   - 서버(server/server.js)는 방을 만들고 메시지를 전달할 뿐 게임 내용을 모른다.
  * ===================================================================== */
 
-const NET_DEFAULT_SERVER = ''; // 배포한 중계 서버 주소(wss://...). 비워 두면 접속 화면에서 직접 입력
+const NET_DEFAULT_SERVER = 'wss://seven-lords-table.onrender.com'; // 배포한 중계 서버 주소. ?server=wss://... 또는 접속 화면 입력으로 바꿀 수 있다
 const NET = {
   role: 'off',               // 'off' 혼자 | 'host' 방장 | 'guest' 손님
   ws: null, code: '', slot: 0, peers: {}, lobby: {}, difficulty: 'normal',
