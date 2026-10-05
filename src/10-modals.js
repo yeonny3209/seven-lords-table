@@ -187,3 +187,19 @@ function showGameOver(P) {
     box.querySelector('#goNew').onclick = () => { const o = { lordType: human().lordType, difficulty: G.difficulty, seed: 0 }; closeModal(); startNewGame(o); };
   });
 }
+
+/* ---------- 유닛 정보 창: 장비 해제 · 판매 (모바일에서도 사용) ---------- */
+function showUnitPanel(u) {
+  const P = human();
+  if (!allUnits(P).includes(u)) return;
+  const editable = !P.board.includes(u) || boardEditable();
+  openModal(`<div style="font-size:13px;line-height:1.6">${unitTooltip(u.defId, u.star, u)}</div>
+    <h3 class="mt">장착한 아이템 (${u.items.length}/${CFG.ITEM_MAX})</h3>
+    ${u.items.length ? u.items.map((it, i) => { const info = itemInfo(it); return `<div class="unit-item"><span style="font-size:22px">${info.icon}</span>
+      <div class="ui-d"><b>${info.name}</b><br><small>${info.desc}</small></div><button class="small" data-un="${i}" ${editable ? '' : 'disabled'}>빼기</button></div>`; }).join('') : '<div class="empty-note">없음 — 보관함의 아이템을 누른 뒤 이 유닛을 누르면 장착됩니다.</div>'}
+    <div class="row-btns"><button id="upSell" ${editable ? '' : 'disabled'}>판매 +${sellPrice(u) + (hasAug(P, 'broker') ? 1 : 0)}🪙</button><button class="primary" id="upClose">닫기</button></div>`, box => {
+    box.querySelectorAll('[data-un]').forEach(el => el.onclick = () => { unequipItem(P, u, +el.dataset.un); renderAll(); showUnitPanel(u); });
+    box.querySelector('#upSell').onclick = () => { sellUnit(P, u); closeModal(); toast('판매 완료'); renderAll(); };
+    box.querySelector('#upClose').onclick = closeModal;
+  });
+}

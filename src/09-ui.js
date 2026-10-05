@@ -57,11 +57,12 @@ function renderTraits() {
 
 function renderInventory() {
   const P = human();
+  if (UI.selItem != null && UI.selItem >= P.items.length) UI.selItem = null;
   const box = $('#inventory');
   if (!P.items.length) { box.innerHTML = '<div class="empty-note">아이템 없음</div>'; return; }
   box.innerHTML = P.items.map((it, i) => {
     const info = itemInfo(it);
-    return `<div class="item-chip ${info.component ? '' : 'done'}" data-item="${i}" data-tip="item:${it}">${info.icon}</div>`;
+    return `<div class="item-chip ${info.component ? '' : 'done'} ${UI.selItem === i ? 'sel' : ''}" data-item="${i}" data-tip="item:${it}">${info.icon}</div>`;
   }).join('');
 }
 

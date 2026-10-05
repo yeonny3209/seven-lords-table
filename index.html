@@ -73,6 +73,10 @@ h3.mt { margin-top: 14px; }
 .item-chip { width: 34px; height: 34px; display: grid; place-items: center; font-size: 19px; background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; cursor: grab; }
 .item-chip.done { border-color: var(--gold2); background: #3a2d18; }
 .item-chip:hover { border-color: var(--gold); }
+.item-chip { touch-action: none; }
+.item-chip.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 12px var(--gold); transform: scale(1.12); }
+.unit-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; }
+.unit-item .ui-d { flex: 1; }
 #augList { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .aug-chip { padding: 4px 6px; background: #0003; border: 1px solid var(--line); border-radius: 6px; cursor: help; }
 
@@ -2809,11 +2813,12 @@ function renderTraits() {
 
 function renderInventory() {
   const P = human();
+  if (UI.selItem != null && UI.selItem >= P.items.length) UI.selItem = null;
   const box = $('#inventory');
   if (!P.items.length) { box.innerHTML = '<div class="empty-note">아이템 없음</div>'; return; }
   box.innerHTML = P.items.map((it, i) => {
     const info = itemInfo(it);
-    return `<div class="item-chip ${info.component ? '' : 'done'}" data-item="${i}" data-tip="item:${it}">${info.icon}</div>`;
+    return `<div class="item-chip ${info.component ? '' : 'done'} ${UI.selItem === i ? 'sel' : ''}" data-item="${i}" data-tip="item:${it}">${info.icon}</div>`;
   }).join('');
 }
 
@@ -3149,6 +3154,22 @@ function showGameOver(P) {
   });
 }
 
+/* ---------- 유닛 정보 창: 장비 해제 · 판매 (모바일에서도 사용) ---------- */
+function showUnitPanel(u) {
+  const P = human();
+  if (!allUnits(P).includes(u)) return;
+  const editable = !P.board.includes(u) || boardEditable();
+  openModal(`<div style="font-size:13px;line-height:1.6">${unitTooltip(u.defId, u.star, u)}</div>
+    <h3 class="mt">장착한 아이템 (${u.items.length}/${CFG.ITEM_MAX})</h3>
+    ${u.items.length ? u.items.map((it, i) => { const info = itemInfo(it); return `<div class="unit-item"><span style="font-size:22px">${info.icon}</span>
+      <div class="ui-d"><b>${info.name}</b><br><small>${info.desc}</small></div><button class="small" data-un="${i}" ${editable ? '' : 'disabled'}>빼기</button></div>`; }).join('') : '<div class="empty-note">없음 — 보관함의 아이템을 누른 뒤 이 유닛을 누르면 장착됩니다.</div>'}
+    <div class="row-btns"><button id="upSell" ${editable ? '' : 'disabled'}>판매 +${sellPrice(u) + (hasAug(P, 'broker') ? 1 : 0)}🪙</button><button class="primary" id="upClose">닫기</button></div>`, box => {
+    box.querySelectorAll('[data-un]').forEach(el => el.onclick = () => { unequipItem(P, u, +el.dataset.un); renderAll(); showUnitPanel(u); });
+    box.querySelector('#upSell').onclick = () => { sellUnit(P, u); closeModal(); toast('판매 완료'); renderAll(); };
+    box.querySelector('#upClose').onclick = closeModal;
+  });
+}
+
 /* ===== 11-flow.js ===== */
 /* =====================================================================
  * 11. 진행 — 라운드 흐름, 전투 재생 루프, 공용 선택, 보상, 탈락
@@ -3421,6 +3442,7 @@ const boardEditable = () => G && G.phase === 'prep' && !UI.battleView;
 
 /* ---------- 끌어놓기 ---------- */
 function beginDrag(e, payload, icon) {
+  payload.sx = e.clientX; payload.sy = e.clientY;
   UI.drag = payload;
   const d = $('#drag');
   d.textContent = icon; d.classList.remove('hidden');
@@ -3487,6 +3509,13 @@ window.addEventListener('pointerup', e => {
   const drag = UI.drag;
   endDrag();
   const P = human();
+  // 거의 움직이지 않았으면 '탭'으로 처리 (모바일: 아이템 누르고 → 유닛 누르기)
+  if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 10) {
+    if (drag.item != null) { UI.selItem = UI.selItem === drag.item ? null : drag.item; if (UI.selItem != null) toast('장착할 유닛을 누르세요'); }
+    else if (drag.unit) tapUnit(drag.unit);
+    renderAll();
+    return;
+  }
   if (drag.unit) {
     if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
       if (P.board.includes(drag.unit) && !boardEditable()) return;
@@ -3504,12 +3533,33 @@ window.addEventListener('pointerup', e => {
     const u = unitAt(h);
     if (!u) return;
     if (h.kind === 'board' && !boardEditable()) { toast('전투 중에는 보드 유닛에 장착할 수 없습니다', 'bad'); return; }
-    const it = P.items[drag.item];
-    if (equipItem(u, it)) { P.items.splice(drag.item, 1); toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
-    else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
+    equipFromInventory(u, drag.item);
     renderAll();
   }
 });
+
+// 보관함 아이템 → 유닛 장착 (끌어놓기와 탭 공용)
+function equipFromInventory(u, idx) {
+  const P = human();
+  const it = P.items[idx];
+  if (it == null) return;
+  if (equipItem(u, it)) { P.items.splice(idx, 1); UI.selItem = null; toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
+  else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
+}
+// 유닛을 탭: 선택된 아이템이 있으면 장착, 없으면 유닛 정보 창(장비 해제·판매)
+function tapUnit(u) {
+  const P = human();
+  if (UI.selItem != null) {
+    if (P.board.includes(u) && !boardEditable()) { toast('전투 중에는 보드 유닛에 장착할 수 없습니다', 'bad'); return; }
+    equipFromInventory(u, UI.selItem);
+    return;
+  }
+  showUnitPanel(u);
+}
+function unequipItem(P, u, i) {
+  const it = u.items.splice(i, 1)[0];
+  if (it != null) P.items.push(it);
+}
 
 function moveUnit(P, u, from, to) {
   const onBoard = P.board.includes(u);
@@ -3707,7 +3757,7 @@ window.addEventListener('keydown', e => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   const k = e.key.toLowerCase();
   if (modalOpen()) {
-    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume'); if (b) b.click(); }
+    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume, #upClose'); if (b) b.click(); }
     return;
   }
   if (UI.aim) {

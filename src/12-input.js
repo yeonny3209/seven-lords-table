@@ -28,6 +28,7 @@ const boardEditable = () => G && G.phase === 'prep' && !UI.battleView;
 
 /* ---------- 끌어놓기 ---------- */
 function beginDrag(e, payload, icon) {
+  payload.sx = e.clientX; payload.sy = e.clientY;
   UI.drag = payload;
   const d = $('#drag');
   d.textContent = icon; d.classList.remove('hidden');
@@ -94,6 +95,13 @@ window.addEventListener('pointerup', e => {
   const drag = UI.drag;
   endDrag();
   const P = human();
+  // 거의 움직이지 않았으면 '탭'으로 처리 (모바일: 아이템 누르고 → 유닛 누르기)
+  if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 10) {
+    if (drag.item != null) { UI.selItem = UI.selItem === drag.item ? null : drag.item; if (UI.selItem != null) toast('장착할 유닛을 누르세요'); }
+    else if (drag.unit) tapUnit(drag.unit);
+    renderAll();
+    return;
+  }
   if (drag.unit) {
     if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
       if (P.board.includes(drag.unit) && !boardEditable()) return;
@@ -111,12 +119,33 @@ window.addEventListener('pointerup', e => {
     const u = unitAt(h);
     if (!u) return;
     if (h.kind === 'board' && !boardEditable()) { toast('전투 중에는 보드 유닛에 장착할 수 없습니다', 'bad'); return; }
-    const it = P.items[drag.item];
-    if (equipItem(u, it)) { P.items.splice(drag.item, 1); toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
-    else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
+    equipFromInventory(u, drag.item);
     renderAll();
   }
 });
+
+// 보관함 아이템 → 유닛 장착 (끌어놓기와 탭 공용)
+function equipFromInventory(u, idx) {
+  const P = human();
+  const it = P.items[idx];
+  if (it == null) return;
+  if (equipItem(u, it)) { P.items.splice(idx, 1); UI.selItem = null; toast(`${itemInfo(u.items[u.items.length - 1]).icon} 장착`); }
+  else toast('아이템 칸이 가득 찼습니다 (최대 3개)', 'bad');
+}
+// 유닛을 탭: 선택된 아이템이 있으면 장착, 없으면 유닛 정보 창(장비 해제·판매)
+function tapUnit(u) {
+  const P = human();
+  if (UI.selItem != null) {
+    if (P.board.includes(u) && !boardEditable()) { toast('전투 중에는 보드 유닛에 장착할 수 없습니다', 'bad'); return; }
+    equipFromInventory(u, UI.selItem);
+    return;
+  }
+  showUnitPanel(u);
+}
+function unequipItem(P, u, i) {
+  const it = u.items.splice(i, 1)[0];
+  if (it != null) P.items.push(it);
+}
 
 function moveUnit(P, u, from, to) {
   const onBoard = P.board.includes(u);
@@ -314,7 +343,7 @@ window.addEventListener('keydown', e => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   const k = e.key.toLowerCase();
   if (modalOpen()) {
-    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume'); if (b) b.click(); }
+    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume, #upClose'); if (b) b.click(); }
     return;
   }
   if (UI.aim) {

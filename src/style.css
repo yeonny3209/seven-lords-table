@@ -64,6 +64,10 @@ h3.mt { margin-top: 14px; }
 .item-chip { width: 34px; height: 34px; display: grid; place-items: center; font-size: 19px; background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; cursor: grab; }
 .item-chip.done { border-color: var(--gold2); background: #3a2d18; }
 .item-chip:hover { border-color: var(--gold); }
+.item-chip { touch-action: none; }
+.item-chip.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 12px var(--gold); transform: scale(1.12); }
+.unit-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; }
+.unit-item .ui-d { flex: 1; }
 #augList { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .aug-chip { padding: 4px 6px; background: #0003; border: 1px solid var(--line); border-radius: 6px; cursor: help; }
 
