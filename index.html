@@ -252,6 +252,27 @@ table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7
   .help-grid { grid-template-columns: 1fr; }
 }
 
+/* 도감 · 전적 */
+.cx-tabs { margin-bottom: 10px; flex-wrap: wrap; }
+.cx-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.cx-filters input, .cx-filters select { font: inherit; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 0; }
+.cx-filters input { flex: 1; min-width: 110px; }
+.cx-count { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+.cx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.cx-card { border: 2px solid var(--cc, var(--line)); border-radius: 8px; padding: 6px 3px; text-align: center; background: var(--panel); cursor: pointer; }
+.cx-card:hover, .cx-card.sel { box-shadow: 0 0 10px var(--cc); }
+.cx-card .se { font-size: 26px; line-height: 1.2; }
+.cx-card .sn { font-size: 12px; font-weight: 700; word-break: keep-all; }
+.cx-card .st { font-size: 11px; color: var(--dim); }
+.cx-detail { border: 1px solid var(--gold2); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; font-size: 13px; line-height: 1.5; background: #0003; }
+.cx-row { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; background: var(--panel); font-size: 13px; line-height: 1.55; }
+.cx-row.sp { background: #1d2738; }
+.cx-h { font-size: 15px; }
+.cx-emo { font-size: 20px; margin-top: 4px; letter-spacing: 2px; word-break: break-all; }
+.cx-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
+.cx-stats > div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; }
+.cx-stats b { display: block; font-size: 22px; color: var(--gold); }
+
 </style>
 </head>
 <body>
@@ -268,6 +289,8 @@ table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7
     </div>
     <div class="top-actions">
       <button id="btnSpeed" class="ghost" title="전투 속도 (S)">1배속</button>
+      <button id="btnCodex" class="ghost" title="도감 (C)">📚</button>
+      <button id="btnSound" class="ghost" title="효과음 (M)">🔊</button>
       <button id="btnHelp" class="ghost" title="도움말 (H)">?</button>
       <button id="btnMenu" class="ghost" title="메뉴">☰</button>
     </div>
@@ -302,6 +325,7 @@ table.stats .bar { height: 8px; background: linear-gradient(90deg, #f2c14e, #ff7
         <div class="shop-actions">
           <button id="btnXp" title="경험치 구매 (F)">⬆ 경험치<br><small>4🪙</small></button>
           <button id="btnRoll" title="새로고침 (D)">🔄 새로고침<br><small>2🪙</small></button>
+          <button id="btnAuto" title="자동 배치 (A)">🧩 자동 배치<br><small>보드 정리</small></button>
         </div>
         <div id="shop"></div>
         <div id="sellZone">판매하려면<br>여기로 끌어오기</div>
@@ -1762,7 +1786,7 @@ function newGame(opts) {
   const seed = opts.seed >>> 0 || ((Math.random() * 2 ** 31) | 0);
   const rng = new RNG(seed);
   G = {
-    seed, rngS: 0, difficulty: opts.difficulty || 'normal',
+    seed, rngS: 0, difficulty: opts.difficulty || 'normal', daily: opts.daily || null, nonce: Math.random(),
     stage: 1, round: 1, phase: 'prep', uidN: 1, pool: {}, players: [],
     roundsPlayed: 0, log: [], lastOpp: {}, pendingSpellPick: false,
     battleSpeed: 1, instant: false, over: false,
@@ -2271,8 +2295,13 @@ function aiPrep(P) {
 }
 
 /* ---------- 배치 ---------- */
-function aiArrange(P) {
+// perfect: 사람 플레이어의 자동 배치용 (배치 실수 없음, 시너지 방향은 가진 유닛에서 계산)
+function aiArrange(P, perfect) {
   const diff = DIFFICULTY[G.difficulty], r = R();
+  const focus = P.ai && P.ai.focus ? P.ai.focus : (() => {
+    const c = computeTraits(allUnits(P), P.aug);
+    return TRAIT_KEYS.filter(t => c[t]).sort((a, b) => c[b] - c[a]).slice(0, 2);
+  })();
   const units = allUnits(P);
   const limit = boardLimit(P);
   const chosen = [], seen = new Set(), counts = {};
@@ -2284,7 +2313,7 @@ function aiArrange(P) {
       if (!seen.has(u.defId)) for (const t of UNITS[u.defId].traits) {
         const n = (counts[t] || 0) + 1;
         if (TRAITS[t].tiers.includes(n)) v += 6 * (TRAITS[t].tiers.indexOf(n) + 1);
-        else v += P.ai.focus.includes(t) ? 1.5 : 0.5;
+        else v += focus.includes(t) ? 1.5 : 0.5;
       }
       if (v > bv) { bv = v; bi = i; }
     });
@@ -2299,7 +2328,7 @@ function aiArrange(P) {
   for (const u of pool.slice(CFG.BENCH)) sellUnit(P, u);
   placeFormation(P, chosen);
   // 쉬움: 배치 실수
-  for (const u of P.board) if (r.chance(diff.misplace)) {
+  if (!perfect) for (const u of P.board) if (r.chance(diff.misplace)) {
     const free = [];
     for (let rr = 0; rr < CFG.ROWS; rr++) for (let cc = 0; cc < CFG.COLS; cc++) if (!P.board.some(x => x.r === rr && x.c === cc)) free.push([rr, cc]);
     if (free.length) [u.r, u.c] = r.pick(free);
@@ -2317,7 +2346,7 @@ function placeFormation(P, list) {
   const all = [...frontCells, ...backCells];
   // 어려움: 플레이어가 돌격대로 뒷줄을 노리면 수호자 하나를 뒷줄에 세운다
   const H = G ? human() : null;
-  const counter = H && DIFFICULTY[G.difficulty].counter && H.alive && traitTier('vanguard', computeTraits(H.board, H.aug).vanguard || 0) >= 1;
+  const counter = H && P !== H && DIFFICULTY[G.difficulty].counter && H.alive && traitTier('vanguard', computeTraits(H.board, H.aug).vanguard || 0) >= 1;
   const role = u => UNITS[u.defId].roles[0];
   const sorted = list.slice().sort((a, b) => unitPower(b) - unitPower(a));
   let backGuard = counter ? sorted.filter(u => role(u) === 'guardian')[1] : null;
@@ -2647,6 +2676,7 @@ function pushEffects(B, events) {
   for (const e of events) {
     switch (e.t) {
       case 'atk': {
+        sfx('hit');
         const a = pos(e.uid), b = pos(e.tuid);
         if (!a || !b) break;
         if (e.ranged) FX.projs.push({ x0: a[0], y0: a[1], x1: b[0], y1: b[1], t: 0, dur: 0.18, color: e.ghost ? '#c9a6ff' : '#fff2b0' });
@@ -2659,6 +2689,7 @@ function pushEffects(B, events) {
         break;
       }
       case 'dmg': {
+        if (e.crit) sfx('crit');
         const p = pos(e.uid); if (!p) break;
         if (e.a < 1) break;
         const big = e.a >= 250 || e.crit;
@@ -2666,24 +2697,25 @@ function pushEffects(B, events) {
         break;
       }
       case 'heal': { const p = pos(e.uid); if (p) FX.floats.push({ x: p[0], y: p[1] - 14, text: '+' + Math.round(e.a), color: '#59d97a', size: 12, t: 0, dur: 0.8 }); break; }
-      case 'shield': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#e8f0ff' }); break; }
-      case 'stun': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.3, kind: 'ring', color: '#ffd84a' }); break; }
+      case 'shield': { sfx('shield'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#e8f0ff' }); break; }
+      case 'stun': { sfx('stun'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.3, kind: 'ring', color: '#ffd84a' }); break; }
       case 'skill': {
+        sfx('skill');
         const p = pos(e.uid); if (!p) break;
         FX.texts.push({ x: p[0], y: p[1] - 40, text: e.name, color: '#d6b4ff', t: 0, dur: 1.1 });
         FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.35, kind: 'ring', color: '#b07cff' });
         break;
       }
-      case 'spell': showSpellBanner(e); {
+      case 'spell': showSpellBanner(e); sfx(e.side === UI.mySide ? 'spell' : 'enemySpell'); {
         const t = e.target || {};
         if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === UI.mySide ? '#7cc6ff' : '#ff6b6b' }); }
         if (t.r != null && t.c != null && t.uid == null) { const [x, y] = cellCenter(t.r, t.c); FX.flashes.push({ x, y, t: 0, dur: 0.6, kind: 'burst', color: '#7cc6ff', size: 90 }); }
         if (e.id === 'timestop') FX.shake = 0.3;
         break;
       }
-      case 'death': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.5, kind: 'burst', color: '#ffffff' }); break; }
+      case 'death': { sfx('death'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.5, kind: 'burst', color: '#ffffff' }); break; }
       case 'execute': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '처형!', color: '#ff5f5f', t: 0, dur: 1 }); break; }
-      case 'leap': case 'blink': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
+      case 'leap': case 'blink': { sfx('whoosh'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
       case 'ghost': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '유령화', color: '#c9a6ff', t: 0, dur: 0.9 }); break; }
       case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '부활 중', color: '#fff2b0', t: 0, dur: 1 }); break; }
       case 'laststand': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '최후의 저항!', color: '#ff8f5a', t: 0, dur: 1.2 }); break; }
@@ -2773,6 +2805,11 @@ function drawDragGhostHint() {
 
 function toast(msg, kind) {
   if (NET.capture) { NET.capture.push([msg, kind]); return; } // 방장이 손님의 행동을 처리하는 중이면 그 손님에게 보낼 알림으로 모아 둔다
+  if (msg === '승리!') sfx('win');
+  else if (msg === '패배' || msg === '시간 초과') sfx('lose');
+  else if (kind === 'gold' && msg.includes('합성')) sfx('merge');
+  else if (kind === 'gold' && msg.startsWith('레벨')) sfx('level');
+  else if (kind === 'bad') sfx('err');
   const el = document.createElement('div');
   el.className = 'toast' + (kind ? ' ' + kind : '');
   el.textContent = msg;
@@ -2959,8 +2996,12 @@ function spellTooltip(id, lvl) {
     <div>${spellDesc(id, lvl)}</div>${next}`;
 }
 
+// 터치 기기(마우스 올리기 없음)에서는 탭할 때 뜬 툴팁이 남지 않도록 잠시 뒤 숨긴다
+const NO_HOVER = window.matchMedia && window.matchMedia('(hover: none)').matches;
+let tipTimer = 0;
 function showTip(html, x, y) {
   const el = $('#tooltip');
+  if (NO_HOVER) { clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 2200); }
   el.innerHTML = html;
   el.classList.remove('hidden');
   const w = el.offsetWidth, h = el.offsetHeight;
@@ -3011,6 +3052,9 @@ function showTitle() {
     <div class="row-btns">
       <button id="tSim" class="ghost">📊 밸런스 시뮬레이션</button>
       <button id="tOnline">🌐 온라인 대결</button>
+      <button id="tDaily">📅 오늘의 도전</button>
+      <button id="tStats" class="ghost">🏅 전적</button>
+      <button id="tCodex" class="ghost">📚 도감</button>
       <button id="tHelp" class="ghost">도움말</button>
       ${saved && !saved.over ? `<button id="tCont">이어하기 (${saved.stage}-${saved.round})</button>` : ''}
       <button id="tNew" class="primary">새 게임 시작</button>
@@ -3030,6 +3074,9 @@ function showTitle() {
     if (c) c.onclick = () => { closeModal(); continueGame(saved); };
     box.querySelector('#tHelp').onclick = () => showHelp(showTitle);
     box.querySelector('#tOnline').onclick = showOnlineMenu;
+    box.querySelector('#tDaily').onclick = () => { closeModal(); startDaily(lord); };
+    box.querySelector('#tStats').onclick = () => showStats(showTitle);
+    box.querySelector('#tCodex').onclick = () => showCodex(showTitle);
     box.querySelector('#tSim').onclick = () => showSimulation(showTitle);
   });
 }
@@ -3043,7 +3090,8 @@ function showHelp(back) {
       <div><b>아이템</b><br>보관함의 재료를 유닛에 끌어다 놓으면 장착되고, 재료 2개가 모이면 완성 아이템이 됩니다. 유닛당 최대 3개. 판매 시 보관함으로 돌아옵니다.</div>
       <div><b>군주 주문</b><br>전투 중 군주 마나(초당 1.5, 아군 처치 시 +1)가 차면 주문 카드가 밝아집니다. 카드 클릭 또는 <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> → 조준(전투 0.25배속) → 대상 클릭. <kbd>Tab</kbd> 대상 순환, <kbd>Enter</kbd> 시전, <kbd>Esc</kbd>/우클릭 취소.</div>
       <div><b>자동 시전</b><br>주문서에서 주문마다 자동 시전 조건을 고를 수 있습니다. 자동 시전은 직접 시전보다 효과가 10% 약합니다. '즉시 결과' 속도에서는 모든 주문이 자동 규칙으로 시전됩니다.</div>
-      <div><b>단축키</b><br><kbd>D</kbd> 새로고침 · <kbd>F</kbd> 경험치 · <kbd>E</kbd> 마우스 아래 유닛 판매 · <kbd>Space</kbd> 준비 완료 · <kbd>B</kbd> 주문서 · <kbd>S</kbd> 전투 속도</div>
+      <div><b>단축키</b><br><kbd>D</kbd> 새로고침 · <kbd>F</kbd> 경험치 · <kbd>E</kbd> 마우스 아래 유닛 판매 · <kbd>Space</kbd> 준비 완료 · <kbd>B</kbd> 주문서 · <kbd>S</kbd> 전투 속도 · <kbd>A</kbd> 자동 배치 · <kbd>C</kbd> 도감 · <kbd>M</kbd> 효과음</div>
+      <div><b>부가 기능</b><br>📚 도감에서 유닛·시너지·주문·증강·아이템을 검색할 수 있고, 🧩 자동 배치는 보드를 한 번에 정리해 줍니다. 시작 화면의 📅 오늘의 도전은 날짜가 시드라 모두가 같은 AI 군주를 상대하고, 🏅 전적에 기록이 쌓입니다.</div>
       <div><b>라운드</b><br>1단계는 몬스터 3라운드. 2단계부터 대전·공용 선택(체력 낮은 순으로 선택)·몬스터 라운드가 섞입니다. 2·3·4단계 시작 시 증강을 고릅니다. 전투는 30초 제한이며, 15초부터 연장전으로 피해가 점점 커집니다.</div>
     </div>
     <div class="row-btns"><button class="primary" id="hBack">닫기</button></div>`, box => {
@@ -3197,6 +3245,7 @@ function showCarousel(st, onPick) {
 }
 
 function showGameOver(P) {
+  recordResult(P);
   if (NET.role === 'off') clearSave();
   const win = P.place === 1;
   openModal(`<div class="title-hero"><div class="crown">${win ? '👑' : '🪦'}</div>
@@ -3380,7 +3429,7 @@ function onReady() {
   if (!G || G.phase !== 'prep' || modalOpen()) return;
   const P = human();
   if (!P.alive || P.ready) return;
-  P.ready = true;
+  P.ready = true; sfx('ready');
   if (NET.role === 'guest') netAct('ready');
   else if (FLOW.checkReady) FLOW.checkReady();
   renderTop();
@@ -3631,6 +3680,251 @@ async function carouselRound(tok) {
   syncAll(); renderAll();
 }
 
+/* ===== 12-audio.js ===== */
+/* =====================================================================
+ * 12. 효과음 — Web Audio로 합성 (파일 없음). 음소거는 브라우저에 기억한다.
+ * ===================================================================== */
+
+const AUDIO = { ctx: null, muted: false, last: {}, master: 0.5 };
+try { AUDIO.muted = localStorage.getItem('slt.mute') === '1'; } catch (e) { /* 저장 불가 환경 */ }
+
+function audioCtx() {
+  if (!AUDIO.ctx) {
+    try { const C = window.AudioContext || window.webkitAudioContext; if (C) AUDIO.ctx = new C(); } catch (e) { /* 오디오 없음 */ }
+  }
+  if (AUDIO.ctx && AUDIO.ctx.state === 'suspended') AUDIO.ctx.resume().catch(() => {});
+  return AUDIO.ctx;
+}
+// 브라우저 정책상 소리는 사용자가 한 번 누른 뒤부터 난다
+window.addEventListener('pointerdown', () => { if (!AUDIO.muted) audioCtx(); }, { once: false, passive: true });
+
+function tone(freq, dur, type = 'sine', vol = 0.2, slideTo = null, delay = 0) {
+  const c = AUDIO.ctx; if (!c) return;
+  const t0 = c.currentTime + delay;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol * AUDIO.master, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(c.destination);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noiseBurst(dur, vol = 0.15, filterHz = 1800, delay = 0) {
+  const c = AUDIO.ctx; if (!c) return;
+  const n = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  s.buffer = buf; f.type = 'lowpass'; f.frequency.value = filterHz;
+  const t0 = c.currentTime + delay;
+  g.gain.setValueAtTime(vol * AUDIO.master, t0);
+  s.connect(f).connect(g).connect(c.destination);
+  s.start(t0);
+}
+
+// 이름 → [재생 함수, 같은 소리 최소 간격(ms)]
+const SFX = {
+  click:   [() => tone(700, 0.04, 'square', 0.07), 60],
+  err:     [() => tone(180, 0.12, 'sawtooth', 0.12, 120), 150],
+  buy:     [() => { tone(520, 0.07, 'triangle', 0.2); tone(780, 0.1, 'triangle', 0.2, null, 0.06); }, 60],
+  sell:    [() => { tone(700, 0.07, 'triangle', 0.18); tone(430, 0.1, 'triangle', 0.18, null, 0.06); }, 60],
+  roll:    [() => { noiseBurst(0.08, 0.1, 3000); tone(900, 0.05, 'square', 0.06, 500); }, 80],
+  xp:      [() => { tone(440, 0.08, 'triangle', 0.18); tone(660, 0.08, 'triangle', 0.18, null, 0.07); tone(880, 0.12, 'triangle', 0.18, null, 0.14); }, 100],
+  merge:   [() => { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.14, 'triangle', 0.22, null, i * 0.07)); }, 200],
+  level:   [() => { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.16, 'square', 0.1, null, i * 0.08)); }, 300],
+  ready:   [() => tone(600, 0.1, 'triangle', 0.18, 900), 200],
+  hit:     [() => { noiseBurst(0.05, 0.1, 1500); tone(180, 0.05, 'square', 0.05, 90); }, 70],
+  crit:    [() => { noiseBurst(0.08, 0.16, 3500); tone(420, 0.1, 'sawtooth', 0.1, 160); }, 90],
+  skill:   [() => { tone(300, 0.2, 'sawtooth', 0.09, 900); tone(600, 0.15, 'triangle', 0.1, 1200, 0.05); }, 120],
+  spell:   [() => { tone(260, 0.28, 'sawtooth', 0.12, 1040); tone(520, 0.3, 'sine', 0.14, 1560, 0.04); noiseBurst(0.15, 0.06, 5000, 0.1); }, 200],
+  enemySpell: [() => { tone(420, 0.25, 'sawtooth', 0.1, 140); tone(300, 0.3, 'triangle', 0.1, 110, 0.05); }, 250],
+  shield:  [() => tone(880, 0.12, 'sine', 0.1, 1320), 150],
+  stun:    [() => tone(240, 0.12, 'square', 0.07, 120), 150],
+  whoosh:  [() => noiseBurst(0.18, 0.08, 4500), 150],
+  death:   [() => { tone(300, 0.22, 'sawtooth', 0.11, 70); noiseBurst(0.12, 0.08, 900); }, 100],
+  win:     [() => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.2, 'triangle', 0.22, null, i * 0.09)); }, 800],
+  lose:    [() => { [392, 330, 262, 196].forEach((f, i) => tone(f, 0.28, 'sawtooth', 0.12, null, i * 0.14)); }, 800],
+};
+
+function sfx(name) {
+  if (AUDIO.muted) return;
+  const def = SFX[name]; if (!def) return;
+  const now = performance.now();
+  if (now - (AUDIO.last[name] || 0) < def[1]) return;
+  AUDIO.last[name] = now;
+  if (!audioCtx()) return;
+  try { def[0](); } catch (e) { /* 소리 실패는 무시 */ }
+}
+
+function toggleMute() {
+  AUDIO.muted = !AUDIO.muted;
+  try { localStorage.setItem('slt.mute', AUDIO.muted ? '1' : '0'); } catch (e) { /* 저장 불가 */ }
+  updateSoundButton();
+  if (!AUDIO.muted) sfx('click');
+}
+function updateSoundButton() {
+  const b = $('#btnSound');
+  b.textContent = AUDIO.muted ? '🔇' : '🔊';
+  b.title = AUDIO.muted ? '효과음 켜기 (M)' : '효과음 끄기 (M)';
+}
+$('#btnSound').onclick = toggleMute;
+updateSoundButton();
+
+/* ===== 12-extras.js ===== */
+/* =====================================================================
+ * 12. 부가 기능 — 도감, 전적 기록, 일일 도전, 자동 배치
+ * ===================================================================== */
+
+/* ---------- 자동 배치 ---------- */
+function autoArrange(P) { aiArrange(P, true); }
+function doAutoArrange() {
+  if (!G || G.phase !== 'prep' || !human().alive) return;
+  if (NET.role === 'guest') { netAct('auto'); sfx('click'); return; }
+  autoArrange(human());
+  sfx('click'); toast('🧩 자동 배치 완료');
+  renderAll();
+}
+$('#btnAuto').onclick = doAutoArrange;
+$('#btnCodex').onclick = () => showCodex(G ? closeModal : showTitle);
+
+/* ---------- 전적 기록 (이 브라우저에 저장) ---------- */
+const STATS_KEY = 'sevenLordsTable.stats.v1';
+let STATS_MEM = null;
+const emptyStats = () => ({ games: 0, wins: 0, placeSum: 0, best: 0, rounds: 0, topStage: 0, byLord: {}, daily: {}, online: { games: 0, wins: 0 } });
+function loadStats() {
+  try { const s = localStorage.getItem(STATS_KEY); if (s) return { ...emptyStats(), ...JSON.parse(s) }; } catch (e) { /* 저장 불가 */ }
+  return STATS_MEM || emptyStats();
+}
+function saveStats(s) { STATS_MEM = s; try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) { /* 저장 불가 */ } }
+let lastRecorded = '';
+// 게임 오버 때 한 번만 기록 (같은 판의 같은 결과가 두 번 들어오지 않게 막는다)
+function recordResult(P) {
+  const key = `${G.nonce}:${P.id}:${P.place}`;
+  if (key === lastRecorded) return;
+  lastRecorded = key;
+  const s = loadStats();
+  const place = P.place || 8;
+  const won = place === 1;
+  if (NET.role !== 'off') { s.online.games++; if (won) s.online.wins++; }
+  else {
+    s.games++; if (won) s.wins++;
+    s.placeSum += place; s.best = s.best ? Math.min(s.best, place) : place;
+    s.rounds += G.roundsPlayed; s.topStage = Math.max(s.topStage, G.stage);
+    const L = s.byLord[P.lordType] || (s.byLord[P.lordType] = { g: 0, w: 0, sum: 0 });
+    L.g++; L.sum += place; if (won) L.w++;
+    if (G.daily) s.daily[G.daily] = s.daily[G.daily] ? Math.min(s.daily[G.daily], place) : place;
+  }
+  saveStats(s);
+}
+function showStats(back) {
+  const s = loadStats();
+  const avg = s.games ? (s.placeSum / s.games).toFixed(1) : '-';
+  const lordRows = Object.entries(s.byLord).map(([k, L]) => `<tr><td>${LORD_TYPES[k].icon} ${LORD_TYPES[k].name}</td><td>${L.g}</td><td>${L.w}</td><td>${(L.sum / L.g).toFixed(1)}위</td></tr>`).join('');
+  const days = Object.keys(s.daily).sort().reverse().slice(0, 7);
+  openModal(`<h2>🏅 전적</h2><p class="sub">이 브라우저에 저장된 기록입니다 (혼자 하기 기준, 온라인은 따로 집계).</p>
+    <div class="cx-stats">
+      <div><b>${s.games}</b><small>플레이</small></div><div><b>${s.wins}</b><small>우승</small></div>
+      <div><b>${s.games ? Math.round(s.wins / s.games * 100) + '%' : '-'}</b><small>우승률</small></div>
+      <div><b>${s.best ? s.best + '위' : '-'}</b><small>최고 순위</small></div>
+      <div><b>${avg}</b><small>평균 순위</small></div><div><b>${s.topStage || '-'}</b><small>최고 단계</small></div>
+    </div>
+    <h3 class="mt">군주 유형별</h3>
+    ${lordRows ? `<table class="stats"><tr><th>유형</th><th>플레이</th><th>우승</th><th>평균 순위</th></tr>${lordRows}</table>` : '<div class="empty-note">아직 기록이 없습니다.</div>'}
+    <h3 class="mt">일일 도전 (최근 기록)</h3>
+    ${days.length ? days.map(d => `<div style="font-size:14px">${d} — ${s.daily[d]}위${s.daily[d] === 1 ? ' 👑' : ''}</div>`).join('') : '<div class="empty-note">오늘의 도전에 도전해 보세요.</div>'}
+    <h3 class="mt">온라인 대결</h3><div style="font-size:14px">${s.online.games}판 · 우승 ${s.online.wins}회</div>
+    <div class="row-btns"><button id="stReset">기록 지우기</button><button class="primary" id="stClose">닫기</button></div>`, box => {
+    box.querySelector('#stClose').onclick = () => (back ? back() : closeModal());
+    box.querySelector('#stReset').onclick = () => { if (confirm('전적을 모두 지울까요?')) { saveStats(emptyStats()); showStats(back); } };
+  });
+}
+
+/* ---------- 일일 도전: 오늘 날짜가 시드 → 모두가 같은 AI 군주 구성 ---------- */
+function dailyKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function dailySeed(key = dailyKey()) {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return (h >>> 0) || 1;
+}
+function startDaily(lordType) {
+  startNewGame({ lordType, difficulty: 'normal', seed: dailySeed(), daily: dailyKey() });
+}
+
+/* ---------- 도감 ---------- */
+// 필터 줄은 탭을 열 때 한 번만 그리고, 결과 목록만 다시 그린다 (한글 입력 중 입력창이 바뀌면 조합이 끊기므로)
+function showCodex(back, tab = 'unit') {
+  const TABS = [['unit', '유닛'], ['trait', '시너지'], ['spell', '주문'], ['aug', '증강'], ['item', '아이템']];
+  const st = { cost: 0, trait: '', q: '', star: 1, pick: null };
+  const filters = {
+    unit: () => `<div class="cx-filters"><input id="cxQ" placeholder="이름 검색">
+      <div class="seg">${[0, 1, 2, 3, 4, 5].map(c => `<button data-cost="${c}" class="${c === 0 ? 'on' : ''}">${c ? c + '코스트' : '전체'}</button>`).join('')}</div>
+      <select id="cxT"><option value="">모든 시너지</option>${TRAIT_KEYS.map(t => `<option value="${t}">${TRAITS[t].icon} ${TRAITS[t].name}</option>`).join('')}</select></div>`,
+    aug: () => '<div class="cx-filters"><input id="cxQ" placeholder="이름·효과 검색"></div>',
+  };
+  const body = {
+    unit() {
+      const ids = Object.keys(UNITS).filter(id => {
+        const u = UNITS[id];
+        return (!st.cost || u.cost === st.cost) && (!st.trait || u.traits.includes(st.trait)) && (!st.q || u.name.includes(st.q));
+      }).sort((a, b) => UNITS[a].cost - UNITS[b].cost || UNITS[a].name.localeCompare(UNITS[b].name, 'ko'));
+      const detail = st.pick ? `<div class="cx-detail">${unitTooltip(st.pick, st.star)}<div class="seg" style="margin-top:6px">${[1, 2, 3].map(n => `<button data-star="${n}" class="${st.star === n ? 'on' : ''}">★${n}</button>`).join('')}</div></div>` : '<div class="empty-note" style="margin-bottom:8px">유닛을 누르면 자세한 정보가 나옵니다.</div>';
+      return `${detail}<div class="cx-count">${ids.length}종</div>
+        <div class="cx-grid">${ids.map(id => { const u = UNITS[id]; return `<div class="cx-card ${st.pick === id ? 'sel' : ''}" data-u="${id}" style="--cc:${COST_COLOR[u.cost]}"><div class="se">${u.emoji}</div><div class="sn">${u.name}</div><div class="st">${u.cost}🪙 ${u.traits.map(t => TRAITS[t].icon).join('')}</div></div>`; }).join('')}</div>`;
+    },
+    trait() {
+      return TRAIT_KEYS.map(t => {
+        const T = TRAITS[t];
+        const units = Object.values(UNITS).filter(u => u.traits.includes(t)).sort((a, b) => a.cost - b.cost);
+        return `<div class="cx-row" style="border-left:4px solid ${T.color}"><div class="cx-h">${T.icon} <b>${T.name}</b> <small>${T.kind === 'origin' ? '계열' : '역할'} · ${units.length}종</small></div>
+          ${T.tiers.map((n, i) => `<div><b>${n}</b>명: ${T.desc[i]}</div>`).join('')}
+          <div class="cx-emo">${units.map(u => `<span title="${u.name} (${u.cost}코스트)">${u.emoji}</span>`).join('')}</div></div>`;
+      }).join('');
+    },
+    spell() {
+      return SPELL_KEYS.map(id => {
+        const sp = SPELLS[id];
+        return `<div class="cx-row"><div class="cx-h">${sp.icon} <b>${sp.name}</b> <small>${{ atk: '공격형', def: '방어형', ctl: '제어형' }[sp.kind]} · 마나 ${sp.cost} · ${sp.once ? '전투당 1회' : '재사용 ' + sp.cd + '초'}</small></div>
+          ${[1, 2, 3].map(l => `<div><b>${'◆'.repeat(l)}</b> ${spellDesc(id, l)}${l > 1 ? ` <small>(마나 ${spellCost(id, l)}, 강화 ${sp.up[l - 2]}🪙)</small>` : ''}</div>`).join('')}</div>`;
+      }).join('');
+    },
+    aug() {
+      const keys = AUG_KEYS.filter(k => !st.q || AUGMENTS[k].name.includes(st.q) || AUGMENTS[k].desc.includes(st.q));
+      return `<div class="cx-count">${keys.length}종</div>` +
+        keys.map(k => { const a = AUGMENTS[k]; return `<div class="cx-row ${a.spell ? 'sp' : ''}"><div class="cx-h">${a.icon} <b>${a.name}</b>${a.spell ? ' <small style="color:#7cc6ff">주문 증강</small>' : ''}</div><div>${esc(a.desc.replace('{trait}', '선택한 계열'))}</div></div>`; }).join('');
+    },
+    item() {
+      return `<h3>재료 8종 <small>(유닛당 최대 3개, 재료 2개가 합쳐지면 완성 아이템)</small></h3>
+        <div class="cx-grid">${COMP_KEYS.map(k => { const c = COMPONENTS[k]; return `<div class="cx-card" style="--cc:#777"><div class="se">${c.icon}</div><div class="sn">${c.name}</div><div class="st">${c.desc}</div></div>`; }).join('')}</div>
+        <h3 class="mt">고유 효과 완성 아이템 20종 <small>(나머지 16종은 재료 능력치 합산 ×1.2)</small></h3>
+        ${Object.entries(UNIQUE_ITEMS).map(([key, it]) => { const [a, b] = key.split('+'); return `<div class="cx-row"><div class="cx-h">${COMPONENTS[a].icon}+${COMPONENTS[b].icon} → ${it.icon} <b>${it.name}</b></div><div>${it.desc}</div></div>`; }).join('')}`;
+    },
+  };
+  openModal(`<h2>📚 도감</h2>
+    <div class="seg cx-tabs">${TABS.map(([k, n]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${n}</button>`).join('')}</div>
+    ${filters[tab] ? filters[tab]() : ''}
+    <div id="cxBody"></div>
+    <div class="row-btns"><button class="primary" id="cxClose">닫기</button></div>`, box => {
+    const bodyEl = box.querySelector('#cxBody');
+    const render = () => {
+      bodyEl.innerHTML = body[tab]();
+      bodyEl.querySelectorAll('[data-star]').forEach(b => { b.onclick = () => { st.star = +b.dataset.star; render(); }; });
+      bodyEl.querySelectorAll('[data-u]').forEach(c => { c.onclick = () => { st.pick = c.dataset.u; render(); bodyEl.scrollIntoView({ block: 'start' }); }; });
+    };
+    box.querySelectorAll('[data-tab]').forEach(b => { b.onclick = () => showCodex(back, b.dataset.tab); });
+    box.querySelectorAll('[data-cost]').forEach(b => {
+      b.onclick = () => { st.cost = +b.dataset.cost; box.querySelectorAll('[data-cost]').forEach(x => x.classList.toggle('on', x === b)); render(); };
+    });
+    const t = box.querySelector('#cxT'); if (t) t.onchange = () => { st.trait = t.value; render(); };
+    const q = box.querySelector('#cxQ'); if (q) q.oninput = () => { st.q = q.value.trim(); render(); };
+    box.querySelector('#cxClose').onclick = () => (back ? back() : closeModal());
+    render();
+  });
+}
+
 /* ===== 12-input.js ===== */
 /* =====================================================================
  * 12. 입력 — 끌어놓기, 클릭, 주문 조준(감속), 키보드
@@ -3743,7 +4037,7 @@ window.addEventListener('pointerup', e => {
     if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
       if (P.board.includes(drag.unit) && !boardEditable()) return;
       if (NET.role === 'guest') { netAct('sell', { uid: drag.unit.uid }); return; }
-      sellUnit(P, drag.unit); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
+      sellUnit(P, drag.unit); sfx('sell'); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
     }
     const [x, y] = canvasPoint(e);
     const h = hitTest(x, y);
@@ -3838,15 +4132,16 @@ $('#shop').addEventListener('click', e => {
   if (!el || !G || !human().alive || G.phase === 'over') return;
   const P = human();
   const id = P.shop[+el.dataset.shop];
-  if (NET.role === 'guest') { netAct('buy', { slot: +el.dataset.shop }); return; }
-  if (!buyUnit(P, +el.dataset.shop)) {
+  if (NET.role === 'guest') { netAct('buy', { slot: +el.dataset.shop }); sfx('buy'); return; }
+  if (buyUnit(P, +el.dataset.shop)) sfx('buy');
+  else {
     if (id && P.gold < UNITS[id].cost) toast('골드가 부족합니다', 'bad');
     else if (id) toast('대기석이 가득 찼습니다', 'bad');
   }
   renderAll();
 });
-$('#btnXp').onclick = () => { if (G && G.phase === 'prep') { if (NET.role === 'guest') netAct('xp'); else if (buyXp(human())) renderAll(); } };
-$('#btnRoll').onclick = () => { if (G && G.phase !== 'over') { if (NET.role === 'guest') netAct('roll'); else if (reroll(human())) renderAll(); } };
+$('#btnXp').onclick = () => { if (G && G.phase === 'prep') { if (NET.role === 'guest') netAct('xp'); else if (buyXp(human())) { sfx('xp'); renderAll(); } } };
+$('#btnRoll').onclick = () => { if (G && G.phase !== 'over') { if (NET.role === 'guest') netAct('roll'); else if (reroll(human())) { sfx('roll'); renderAll(); } } };
 $('#btnReady').onclick = onReady;
 $('#btnSpellbook').onclick = () => G && showSpellbook();
 $('#btnHelp').onclick = () => showHelp();
@@ -3921,7 +4216,7 @@ function updateAimHint() {
     ally: '아군 유닛을 선택', enemy: '적 유닛을 선택', row: '가로 줄을 선택', cell: '범위 중심 칸을 선택',
     ally2: UI.aim.first ? '맞바꿀 두 번째 아군 선택' : '첫 번째 아군 선택', allyCell: UI.aim.first ? '이동할 빈 칸 선택' : '이동시킬 아군 선택',
   }[sp.target];
-  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (${NET.role === 'off' ? '0.25배속 · ' : ''}Tab 순환 · Enter 시전 · Esc 취소)`;
+  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (${NET.role === 'off' ? '0.25배속' : '실시간'}${NO_HOVER ? '' : ' · Tab 순환 · Enter 시전 · Esc 취소'})`;
 }
 function aimClick(h) {
   if (!h || h.kind !== 'board') return;
@@ -3990,7 +4285,7 @@ window.addEventListener('keydown', e => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   const k = e.key.toLowerCase();
   if (modalOpen()) {
-    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume, #upClose'); if (b) b.click(); }
+    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume, #upClose, #cxClose, #stClose'); if (b) b.click(); }
     return;
   }
   if (UI.aim) {
@@ -4010,6 +4305,9 @@ window.addEventListener('keydown', e => {
   else if (k === 'f') $('#btnXp').click();
   else if (k === ' ') { e.preventDefault(); onReady(); }
   else if (k === 'b') showSpellbook();
+  else if (k === 'c') $('#btnCodex').click();
+  else if (k === 'm') toggleMute();
+  else if (k === 'a') doAutoArrange();
   else if (k === 's') cycleSpeed();
   else if (k === 'h') showHelp();
   else if (k === 'e') {
@@ -4046,6 +4344,35 @@ function netServerUrl() {
 }
 function netStore(k, v) { try { if (v === undefined) return localStorage.getItem('slt.' + k) || ''; localStorage.setItem('slt.' + k, v); } catch (e) { /* 저장 불가 */ } return ''; }
 
+/* ---------- 방 코드 입력 보정 ---------- */
+// 한글 키보드 상태로 코드를 치면 영문 대신 한글이 들어간다 → 같은 자판 위치의 영문으로 되돌린다 (ㅁㅠㅊ → ABC)
+const JAMO_KEY = { 'ㅂ': 'Q', 'ㅈ': 'W', 'ㄷ': 'E', 'ㄱ': 'R', 'ㅅ': 'T', 'ㅛ': 'Y', 'ㅕ': 'U', 'ㅑ': 'I', 'ㅐ': 'O', 'ㅔ': 'P', 'ㅁ': 'A', 'ㄴ': 'S', 'ㅇ': 'D', 'ㄹ': 'F', 'ㅎ': 'G', 'ㅗ': 'H', 'ㅓ': 'J', 'ㅏ': 'K', 'ㅣ': 'L', 'ㅋ': 'Z', 'ㅌ': 'X', 'ㅊ': 'C', 'ㅍ': 'V', 'ㅠ': 'B', 'ㅜ': 'N', 'ㅡ': 'M' };
+const JAMO_ALIAS = { 'ㅃ': 'ㅂ', 'ㅉ': 'ㅈ', 'ㄸ': 'ㄷ', 'ㄲ': 'ㄱ', 'ㅆ': 'ㅅ', 'ㅒ': 'ㅐ', 'ㅖ': 'ㅔ' };
+const JAMO_SPLIT = { 'ㅘ': 'ㅗㅏ', 'ㅙ': 'ㅗㅐ', 'ㅚ': 'ㅗㅣ', 'ㅝ': 'ㅜㅓ', 'ㅞ': 'ㅜㅔ', 'ㅟ': 'ㅜㅣ', 'ㅢ': 'ㅡㅣ', 'ㄳ': 'ㄱㅅ', 'ㄵ': 'ㄴㅈ', 'ㄶ': 'ㄴㅎ', 'ㄺ': 'ㄹㄱ', 'ㄻ': 'ㄹㅁ', 'ㄼ': 'ㄹㅂ', 'ㄽ': 'ㄹㅅ', 'ㄾ': 'ㄹㅌ', 'ㄿ': 'ㄹㅍ', 'ㅀ': 'ㄹㅎ', 'ㅄ': 'ㅂㅅ' };
+const HG_CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', HG_JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ';
+const HG_JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+function normalizeCode(s) {
+  let out = '';
+  for (const ch of String(s)) {
+    const c = ch.codePointAt(0);
+    const jamos = c >= 0xAC00 && c <= 0xD7A3
+      ? [HG_CHO[Math.floor((c - 0xAC00) / 588)], HG_JUNG[Math.floor(((c - 0xAC00) % 588) / 28)], HG_JONG[(c - 0xAC00) % 28]]
+      : [ch];
+    for (const j of jamos) for (const k of (JAMO_SPLIT[j] || j)) out += JAMO_KEY[JAMO_ALIAS[k] || k] || k;
+  }
+  return out.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+}
+
+/* ---------- 화면 켜 두기 (휴대폰 화면이 꺼지면 연결이 끊겨 방이 닫힌다) ---------- */
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on) { if (navigator.wakeLock && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } }
+    else if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { wakeLock = null; /* 지원하지 않거나 거부됨 */ }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && NET.role !== 'off') keepAwake(true); });
+
 /* ---------- 연결 ---------- */
 function netOpen(url, first) {
   return new Promise((resolve, reject) => {
@@ -4076,6 +4403,7 @@ function netAct(a, p) { netSend({ t: 'act', a, p: p || {} }); return true; }
 
 function netLeave() {
   const ws = NET.ws;
+  keepAwake(false);
   NET.ws = null; NET.role = 'off'; NET.code = ''; NET.peers = {}; NET.lobby = {}; NET.inLobby = false;
   NET.pidOfSlot = {}; NET.slotOfPid = {}; NET.pickWait = null;
   for (const id in NET.waiters) NET.waiters[id].res(null);
@@ -4170,6 +4498,7 @@ const ACTS = {
     const s = P.spells[p.i | 0];
     if (s && G.phase === 'prep' && (p.v === 'off' || SPELLS[s.id].auto.includes(p.v))) s.rule = p.v;
   },
+  auto: P => { if (G.phase === 'prep') autoArrange(P); },
   ready: P => { if (G.phase === 'prep') { P.ready = true; if (FLOW.checkReady) FLOW.checkReady(); } },
 };
 
@@ -4320,7 +4649,7 @@ function showOnlineMenu() {
     <div class="field"><label>닉네임</label><input id="onName" maxlength="12" placeholder="군주" value="${esc(nick)}"></div>
     <div id="onErr" style="color:var(--red);font-size:13px;min-height:18px"></div>
     <div class="field"><label>방 만들기</label><button class="primary" id="onCreate">방 만들기</button></div>
-    <div class="field"><label>코드로 입장</label><input id="onCode" maxlength="4" placeholder="ABCD" style="width:90px;text-transform:uppercase"><button id="onJoin">입장</button></div>
+    <div class="field"><label>코드로 입장</label><input id="onCode" maxlength="12" placeholder="ABCD" autocomplete="off" autocapitalize="characters" spellcheck="false" style="width:100px;text-transform:uppercase"><button id="onJoin">입장</button></div>
     <div class="row-btns"><button id="onBack">뒤로</button></div>`, box => {
     const err = m => { box.querySelector('#onErr').textContent = m || ''; };
     const params = () => {
@@ -4336,6 +4665,7 @@ function showOnlineMenu() {
       try {
         const m = await netOpen(p.u, { ...first, name: p.n });
         NET.role = role; NET.code = m.code; NET.slot = m.slot; NET.difficulty = 'normal';
+        keepAwake(true);
         NET.peers = {}; for (const x of m.peers) NET.peers[x.slot] = { name: x.name };
         NET.lobby = {}; if (role === 'host') NET.lobby[0] = { lord: 'war' };
         showLobby();
@@ -4344,7 +4674,12 @@ function showOnlineMenu() {
       }
     };
     box.querySelector('#onCreate').onclick = () => go({ t: 'create' }, 'host');
-    box.querySelector('#onJoin').onclick = () => go({ t: 'join', code: box.querySelector('#onCode').value.trim() }, 'guest');
+    box.querySelector('#onJoin').onclick = () => {
+      const code = normalizeCode(box.querySelector('#onCode').value);
+      if (code.length !== 4) { err('방 코드는 영문·숫자 4자리입니다. 한글 키보드라면 영문으로 바꿔 입력하세요.'); return; }
+      box.querySelector('#onCode').value = code;
+      go({ t: 'join', code }, 'guest');
+    };
     box.querySelector('#onBack').onclick = showTitle;
   });
 }
@@ -4359,7 +4694,7 @@ function showLobby() {
     return `<div class="prow ${s === NET.slot ? 'me' : ''}"><div class="pe">${HUMAN_EMOJIS[i]}</div><div class="pm"><div class="pn">${esc((NET.peers[s] || {}).name || '?')} ${s === 0 ? '👑' : ''}</div></div><div class="pv" style="width:auto">${L ? L.icon + ' ' + L.name : ''}</div></div>`;
   }).join('');
   openModal(`<h2>방 코드 <span style="letter-spacing:.2em;color:var(--text)">${esc(NET.code)}</span></h2>
-    <p class="sub">친구에게 이 코드를 알려 주세요. 현재 ${slots.length}명 · 남는 ${8 - slots.length}자리는 AI 군주가 채웁니다.</p>
+    <p class="sub">친구에게 이 코드를 알려 주세요. <b>이 화면을 켜 둔 채로 기다려야 합니다</b> (닫거나 새로고침하면 방이 사라집니다). 현재 ${slots.length}명 · 남는 ${8 - slots.length}자리는 AI 군주가 채웁니다.</p>
     <div id="lobbyRows">${rows}</div>
     <h3 class="mt">내 군주 유형</h3>
     <div class="choice-grid">${Object.entries(LORD_TYPES).map(([k, L]) => `<div class="choice ${k === me ? 'sel' : ''}" data-lord="${k}"><div class="ci">${L.icon}</div><div class="cn">${L.name}</div><div class="cd">${L.passive}</div></div>`).join('')}</div>

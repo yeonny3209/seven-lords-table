@@ -24,6 +24,35 @@ function netServerUrl() {
 }
 function netStore(k, v) { try { if (v === undefined) return localStorage.getItem('slt.' + k) || ''; localStorage.setItem('slt.' + k, v); } catch (e) { /* 저장 불가 */ } return ''; }
 
+/* ---------- 방 코드 입력 보정 ---------- */
+// 한글 키보드 상태로 코드를 치면 영문 대신 한글이 들어간다 → 같은 자판 위치의 영문으로 되돌린다 (ㅁㅠㅊ → ABC)
+const JAMO_KEY = { 'ㅂ': 'Q', 'ㅈ': 'W', 'ㄷ': 'E', 'ㄱ': 'R', 'ㅅ': 'T', 'ㅛ': 'Y', 'ㅕ': 'U', 'ㅑ': 'I', 'ㅐ': 'O', 'ㅔ': 'P', 'ㅁ': 'A', 'ㄴ': 'S', 'ㅇ': 'D', 'ㄹ': 'F', 'ㅎ': 'G', 'ㅗ': 'H', 'ㅓ': 'J', 'ㅏ': 'K', 'ㅣ': 'L', 'ㅋ': 'Z', 'ㅌ': 'X', 'ㅊ': 'C', 'ㅍ': 'V', 'ㅠ': 'B', 'ㅜ': 'N', 'ㅡ': 'M' };
+const JAMO_ALIAS = { 'ㅃ': 'ㅂ', 'ㅉ': 'ㅈ', 'ㄸ': 'ㄷ', 'ㄲ': 'ㄱ', 'ㅆ': 'ㅅ', 'ㅒ': 'ㅐ', 'ㅖ': 'ㅔ' };
+const JAMO_SPLIT = { 'ㅘ': 'ㅗㅏ', 'ㅙ': 'ㅗㅐ', 'ㅚ': 'ㅗㅣ', 'ㅝ': 'ㅜㅓ', 'ㅞ': 'ㅜㅔ', 'ㅟ': 'ㅜㅣ', 'ㅢ': 'ㅡㅣ', 'ㄳ': 'ㄱㅅ', 'ㄵ': 'ㄴㅈ', 'ㄶ': 'ㄴㅎ', 'ㄺ': 'ㄹㄱ', 'ㄻ': 'ㄹㅁ', 'ㄼ': 'ㄹㅂ', 'ㄽ': 'ㄹㅅ', 'ㄾ': 'ㄹㅌ', 'ㄿ': 'ㄹㅍ', 'ㅀ': 'ㄹㅎ', 'ㅄ': 'ㅂㅅ' };
+const HG_CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', HG_JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ';
+const HG_JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+function normalizeCode(s) {
+  let out = '';
+  for (const ch of String(s)) {
+    const c = ch.codePointAt(0);
+    const jamos = c >= 0xAC00 && c <= 0xD7A3
+      ? [HG_CHO[Math.floor((c - 0xAC00) / 588)], HG_JUNG[Math.floor(((c - 0xAC00) % 588) / 28)], HG_JONG[(c - 0xAC00) % 28]]
+      : [ch];
+    for (const j of jamos) for (const k of (JAMO_SPLIT[j] || j)) out += JAMO_KEY[JAMO_ALIAS[k] || k] || k;
+  }
+  return out.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+}
+
+/* ---------- 화면 켜 두기 (휴대폰 화면이 꺼지면 연결이 끊겨 방이 닫힌다) ---------- */
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on) { if (navigator.wakeLock && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } }
+    else if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { wakeLock = null; /* 지원하지 않거나 거부됨 */ }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && NET.role !== 'off') keepAwake(true); });
+
 /* ---------- 연결 ---------- */
 function netOpen(url, first) {
   return new Promise((resolve, reject) => {
@@ -54,6 +83,7 @@ function netAct(a, p) { netSend({ t: 'act', a, p: p || {} }); return true; }
 
 function netLeave() {
   const ws = NET.ws;
+  keepAwake(false);
   NET.ws = null; NET.role = 'off'; NET.code = ''; NET.peers = {}; NET.lobby = {}; NET.inLobby = false;
   NET.pidOfSlot = {}; NET.slotOfPid = {}; NET.pickWait = null;
   for (const id in NET.waiters) NET.waiters[id].res(null);
@@ -148,6 +178,7 @@ const ACTS = {
     const s = P.spells[p.i | 0];
     if (s && G.phase === 'prep' && (p.v === 'off' || SPELLS[s.id].auto.includes(p.v))) s.rule = p.v;
   },
+  auto: P => { if (G.phase === 'prep') autoArrange(P); },
   ready: P => { if (G.phase === 'prep') { P.ready = true; if (FLOW.checkReady) FLOW.checkReady(); } },
 };
 
@@ -298,7 +329,7 @@ function showOnlineMenu() {
     <div class="field"><label>닉네임</label><input id="onName" maxlength="12" placeholder="군주" value="${esc(nick)}"></div>
     <div id="onErr" style="color:var(--red);font-size:13px;min-height:18px"></div>
     <div class="field"><label>방 만들기</label><button class="primary" id="onCreate">방 만들기</button></div>
-    <div class="field"><label>코드로 입장</label><input id="onCode" maxlength="4" placeholder="ABCD" style="width:90px;text-transform:uppercase"><button id="onJoin">입장</button></div>
+    <div class="field"><label>코드로 입장</label><input id="onCode" maxlength="12" placeholder="ABCD" autocomplete="off" autocapitalize="characters" spellcheck="false" style="width:100px;text-transform:uppercase"><button id="onJoin">입장</button></div>
     <div class="row-btns"><button id="onBack">뒤로</button></div>`, box => {
     const err = m => { box.querySelector('#onErr').textContent = m || ''; };
     const params = () => {
@@ -314,6 +345,7 @@ function showOnlineMenu() {
       try {
         const m = await netOpen(p.u, { ...first, name: p.n });
         NET.role = role; NET.code = m.code; NET.slot = m.slot; NET.difficulty = 'normal';
+        keepAwake(true);
         NET.peers = {}; for (const x of m.peers) NET.peers[x.slot] = { name: x.name };
         NET.lobby = {}; if (role === 'host') NET.lobby[0] = { lord: 'war' };
         showLobby();
@@ -322,7 +354,12 @@ function showOnlineMenu() {
       }
     };
     box.querySelector('#onCreate').onclick = () => go({ t: 'create' }, 'host');
-    box.querySelector('#onJoin').onclick = () => go({ t: 'join', code: box.querySelector('#onCode').value.trim() }, 'guest');
+    box.querySelector('#onJoin').onclick = () => {
+      const code = normalizeCode(box.querySelector('#onCode').value);
+      if (code.length !== 4) { err('방 코드는 영문·숫자 4자리입니다. 한글 키보드라면 영문으로 바꿔 입력하세요.'); return; }
+      box.querySelector('#onCode').value = code;
+      go({ t: 'join', code }, 'guest');
+    };
     box.querySelector('#onBack').onclick = showTitle;
   });
 }
@@ -337,7 +374,7 @@ function showLobby() {
     return `<div class="prow ${s === NET.slot ? 'me' : ''}"><div class="pe">${HUMAN_EMOJIS[i]}</div><div class="pm"><div class="pn">${esc((NET.peers[s] || {}).name || '?')} ${s === 0 ? '👑' : ''}</div></div><div class="pv" style="width:auto">${L ? L.icon + ' ' + L.name : ''}</div></div>`;
   }).join('');
   openModal(`<h2>방 코드 <span style="letter-spacing:.2em;color:var(--text)">${esc(NET.code)}</span></h2>
-    <p class="sub">친구에게 이 코드를 알려 주세요. 현재 ${slots.length}명 · 남는 ${8 - slots.length}자리는 AI 군주가 채웁니다.</p>
+    <p class="sub">친구에게 이 코드를 알려 주세요. <b>이 화면을 켜 둔 채로 기다려야 합니다</b> (닫거나 새로고침하면 방이 사라집니다). 현재 ${slots.length}명 · 남는 ${8 - slots.length}자리는 AI 군주가 채웁니다.</p>
     <div id="lobbyRows">${rows}</div>
     <h3 class="mt">내 군주 유형</h3>
     <div class="choice-grid">${Object.entries(LORD_TYPES).map(([k, L]) => `<div class="choice ${k === me ? 'sel' : ''}" data-lord="${k}"><div class="ci">${L.icon}</div><div class="cn">${L.name}</div><div class="cd">${L.passive}</div></div>`).join('')}</div>

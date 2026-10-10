@@ -150,7 +150,7 @@ function onReady() {
   if (!G || G.phase !== 'prep' || modalOpen()) return;
   const P = human();
   if (!P.alive || P.ready) return;
-  P.ready = true;
+  P.ready = true; sfx('ready');
   if (NET.role === 'guest') netAct('ready');
   else if (FLOW.checkReady) FLOW.checkReady();
   renderTop();

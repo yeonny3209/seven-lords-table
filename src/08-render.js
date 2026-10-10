@@ -237,6 +237,7 @@ function pushEffects(B, events) {
   for (const e of events) {
     switch (e.t) {
       case 'atk': {
+        sfx('hit');
         const a = pos(e.uid), b = pos(e.tuid);
         if (!a || !b) break;
         if (e.ranged) FX.projs.push({ x0: a[0], y0: a[1], x1: b[0], y1: b[1], t: 0, dur: 0.18, color: e.ghost ? '#c9a6ff' : '#fff2b0' });
@@ -249,6 +250,7 @@ function pushEffects(B, events) {
         break;
       }
       case 'dmg': {
+        if (e.crit) sfx('crit');
         const p = pos(e.uid); if (!p) break;
         if (e.a < 1) break;
         const big = e.a >= 250 || e.crit;
@@ -256,24 +258,25 @@ function pushEffects(B, events) {
         break;
       }
       case 'heal': { const p = pos(e.uid); if (p) FX.floats.push({ x: p[0], y: p[1] - 14, text: '+' + Math.round(e.a), color: '#59d97a', size: 12, t: 0, dur: 0.8 }); break; }
-      case 'shield': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#e8f0ff' }); break; }
-      case 'stun': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.3, kind: 'ring', color: '#ffd84a' }); break; }
+      case 'shield': { sfx('shield'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#e8f0ff' }); break; }
+      case 'stun': { sfx('stun'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.3, kind: 'ring', color: '#ffd84a' }); break; }
       case 'skill': {
+        sfx('skill');
         const p = pos(e.uid); if (!p) break;
         FX.texts.push({ x: p[0], y: p[1] - 40, text: e.name, color: '#d6b4ff', t: 0, dur: 1.1 });
         FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.35, kind: 'ring', color: '#b07cff' });
         break;
       }
-      case 'spell': showSpellBanner(e); {
+      case 'spell': showSpellBanner(e); sfx(e.side === UI.mySide ? 'spell' : 'enemySpell'); {
         const t = e.target || {};
         if (t.uid != null) { const p = pos(t.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.6, kind: 'burst', color: e.side === UI.mySide ? '#7cc6ff' : '#ff6b6b' }); }
         if (t.r != null && t.c != null && t.uid == null) { const [x, y] = cellCenter(t.r, t.c); FX.flashes.push({ x, y, t: 0, dur: 0.6, kind: 'burst', color: '#7cc6ff', size: 90 }); }
         if (e.id === 'timestop') FX.shake = 0.3;
         break;
       }
-      case 'death': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.5, kind: 'burst', color: '#ffffff' }); break; }
+      case 'death': { sfx('death'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.5, kind: 'burst', color: '#ffffff' }); break; }
       case 'execute': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '처형!', color: '#ff5f5f', t: 0, dur: 1 }); break; }
-      case 'leap': case 'blink': { const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
+      case 'leap': case 'blink': { sfx('whoosh'); const p = pos(e.uid); if (p) FX.flashes.push({ x: p[0], y: p[1], t: 0, dur: 0.4, kind: 'ring', color: '#ff8f5a' }); break; }
       case 'ghost': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '유령화', color: '#c9a6ff', t: 0, dur: 0.9 }); break; }
       case 'reviveStart': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '부활 중', color: '#fff2b0', t: 0, dur: 1 }); break; }
       case 'laststand': { const p = pos(e.uid); if (p) FX.texts.push({ x: p[0], y: p[1] - 30, text: '최후의 저항!', color: '#ff8f5a', t: 0, dur: 1.2 }); break; }

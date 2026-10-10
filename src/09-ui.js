@@ -4,6 +4,11 @@
 
 function toast(msg, kind) {
   if (NET.capture) { NET.capture.push([msg, kind]); return; } // 방장이 손님의 행동을 처리하는 중이면 그 손님에게 보낼 알림으로 모아 둔다
+  if (msg === '승리!') sfx('win');
+  else if (msg === '패배' || msg === '시간 초과') sfx('lose');
+  else if (kind === 'gold' && msg.includes('합성')) sfx('merge');
+  else if (kind === 'gold' && msg.startsWith('레벨')) sfx('level');
+  else if (kind === 'bad') sfx('err');
   const el = document.createElement('div');
   el.className = 'toast' + (kind ? ' ' + kind : '');
   el.textContent = msg;
@@ -190,8 +195,12 @@ function spellTooltip(id, lvl) {
     <div>${spellDesc(id, lvl)}</div>${next}`;
 }
 
+// 터치 기기(마우스 올리기 없음)에서는 탭할 때 뜬 툴팁이 남지 않도록 잠시 뒤 숨긴다
+const NO_HOVER = window.matchMedia && window.matchMedia('(hover: none)').matches;
+let tipTimer = 0;
 function showTip(html, x, y) {
   const el = $('#tooltip');
+  if (NO_HOVER) { clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 2200); }
   el.innerHTML = html;
   el.classList.remove('hidden');
   const w = el.offsetWidth, h = el.offsetHeight;

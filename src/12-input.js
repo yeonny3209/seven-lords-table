@@ -109,7 +109,7 @@ window.addEventListener('pointerup', e => {
     if (overEl(e, $('#sellZone')) || overEl(e, $('#shop'))) {
       if (P.board.includes(drag.unit) && !boardEditable()) return;
       if (NET.role === 'guest') { netAct('sell', { uid: drag.unit.uid }); return; }
-      sellUnit(P, drag.unit); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
+      sellUnit(P, drag.unit); sfx('sell'); toast(`판매 +${sellPrice(drag.unit)}🪙`); renderAll(); return;
     }
     const [x, y] = canvasPoint(e);
     const h = hitTest(x, y);
@@ -204,15 +204,16 @@ $('#shop').addEventListener('click', e => {
   if (!el || !G || !human().alive || G.phase === 'over') return;
   const P = human();
   const id = P.shop[+el.dataset.shop];
-  if (NET.role === 'guest') { netAct('buy', { slot: +el.dataset.shop }); return; }
-  if (!buyUnit(P, +el.dataset.shop)) {
+  if (NET.role === 'guest') { netAct('buy', { slot: +el.dataset.shop }); sfx('buy'); return; }
+  if (buyUnit(P, +el.dataset.shop)) sfx('buy');
+  else {
     if (id && P.gold < UNITS[id].cost) toast('골드가 부족합니다', 'bad');
     else if (id) toast('대기석이 가득 찼습니다', 'bad');
   }
   renderAll();
 });
-$('#btnXp').onclick = () => { if (G && G.phase === 'prep') { if (NET.role === 'guest') netAct('xp'); else if (buyXp(human())) renderAll(); } };
-$('#btnRoll').onclick = () => { if (G && G.phase !== 'over') { if (NET.role === 'guest') netAct('roll'); else if (reroll(human())) renderAll(); } };
+$('#btnXp').onclick = () => { if (G && G.phase === 'prep') { if (NET.role === 'guest') netAct('xp'); else if (buyXp(human())) { sfx('xp'); renderAll(); } } };
+$('#btnRoll').onclick = () => { if (G && G.phase !== 'over') { if (NET.role === 'guest') netAct('roll'); else if (reroll(human())) { sfx('roll'); renderAll(); } } };
 $('#btnReady').onclick = onReady;
 $('#btnSpellbook').onclick = () => G && showSpellbook();
 $('#btnHelp').onclick = () => showHelp();
@@ -287,7 +288,7 @@ function updateAimHint() {
     ally: '아군 유닛을 선택', enemy: '적 유닛을 선택', row: '가로 줄을 선택', cell: '범위 중심 칸을 선택',
     ally2: UI.aim.first ? '맞바꿀 두 번째 아군 선택' : '첫 번째 아군 선택', allyCell: UI.aim.first ? '이동할 빈 칸 선택' : '이동시킬 아군 선택',
   }[sp.target];
-  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (${NET.role === 'off' ? '0.25배속 · ' : ''}Tab 순환 · Enter 시전 · Esc 취소)`;
+  $('#aimHint').textContent = `${sp.icon} ${sp.name} — ${t} (${NET.role === 'off' ? '0.25배속' : '실시간'}${NO_HOVER ? '' : ' · Tab 순환 · Enter 시전 · Esc 취소'})`;
 }
 function aimClick(h) {
   if (!h || h.kind !== 'board') return;
@@ -356,7 +357,7 @@ window.addEventListener('keydown', e => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   const k = e.key.toLowerCase();
   if (modalOpen()) {
-    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume, #upClose'); if (b) b.click(); }
+    if (k === 'escape') { const b = $('#pClose, #sbClose, #hBack, #mResume, #upClose, #cxClose, #stClose'); if (b) b.click(); }
     return;
   }
   if (UI.aim) {
@@ -376,6 +377,9 @@ window.addEventListener('keydown', e => {
   else if (k === 'f') $('#btnXp').click();
   else if (k === ' ') { e.preventDefault(); onReady(); }
   else if (k === 'b') showSpellbook();
+  else if (k === 'c') $('#btnCodex').click();
+  else if (k === 'm') toggleMute();
+  else if (k === 'a') doAutoArrange();
   else if (k === 's') cycleSpeed();
   else if (k === 'h') showHelp();
   else if (k === 'e') {

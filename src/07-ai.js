@@ -98,8 +98,13 @@ function aiPrep(P) {
 }
 
 /* ---------- 배치 ---------- */
-function aiArrange(P) {
+// perfect: 사람 플레이어의 자동 배치용 (배치 실수 없음, 시너지 방향은 가진 유닛에서 계산)
+function aiArrange(P, perfect) {
   const diff = DIFFICULTY[G.difficulty], r = R();
+  const focus = P.ai && P.ai.focus ? P.ai.focus : (() => {
+    const c = computeTraits(allUnits(P), P.aug);
+    return TRAIT_KEYS.filter(t => c[t]).sort((a, b) => c[b] - c[a]).slice(0, 2);
+  })();
   const units = allUnits(P);
   const limit = boardLimit(P);
   const chosen = [], seen = new Set(), counts = {};
@@ -111,7 +116,7 @@ function aiArrange(P) {
       if (!seen.has(u.defId)) for (const t of UNITS[u.defId].traits) {
         const n = (counts[t] || 0) + 1;
         if (TRAITS[t].tiers.includes(n)) v += 6 * (TRAITS[t].tiers.indexOf(n) + 1);
-        else v += P.ai.focus.includes(t) ? 1.5 : 0.5;
+        else v += focus.includes(t) ? 1.5 : 0.5;
       }
       if (v > bv) { bv = v; bi = i; }
     });
@@ -126,7 +131,7 @@ function aiArrange(P) {
   for (const u of pool.slice(CFG.BENCH)) sellUnit(P, u);
   placeFormation(P, chosen);
   // 쉬움: 배치 실수
-  for (const u of P.board) if (r.chance(diff.misplace)) {
+  if (!perfect) for (const u of P.board) if (r.chance(diff.misplace)) {
     const free = [];
     for (let rr = 0; rr < CFG.ROWS; rr++) for (let cc = 0; cc < CFG.COLS; cc++) if (!P.board.some(x => x.r === rr && x.c === cc)) free.push([rr, cc]);
     if (free.length) [u.r, u.c] = r.pick(free);
@@ -144,7 +149,7 @@ function placeFormation(P, list) {
   const all = [...frontCells, ...backCells];
   // 어려움: 플레이어가 돌격대로 뒷줄을 노리면 수호자 하나를 뒷줄에 세운다
   const H = G ? human() : null;
-  const counter = H && DIFFICULTY[G.difficulty].counter && H.alive && traitTier('vanguard', computeTraits(H.board, H.aug).vanguard || 0) >= 1;
+  const counter = H && P !== H && DIFFICULTY[G.difficulty].counter && H.alive && traitTier('vanguard', computeTraits(H.board, H.aug).vanguard || 0) >= 1;
   const role = u => UNITS[u.defId].roles[0];
   const sorted = list.slice().sort((a, b) => unitPower(b) - unitPower(a));
   let backGuard = counter ? sorted.filter(u => role(u) === 'guardian')[1] : null;

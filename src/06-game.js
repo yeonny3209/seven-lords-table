@@ -13,7 +13,7 @@ function newGame(opts) {
   const seed = opts.seed >>> 0 || ((Math.random() * 2 ** 31) | 0);
   const rng = new RNG(seed);
   G = {
-    seed, rngS: 0, difficulty: opts.difficulty || 'normal',
+    seed, rngS: 0, difficulty: opts.difficulty || 'normal', daily: opts.daily || null, nonce: Math.random(),
     stage: 1, round: 1, phase: 'prep', uidN: 1, pool: {}, players: [],
     roundsPlayed: 0, log: [], lastOpp: {}, pendingSpellPick: false,
     battleSpeed: 1, instant: false, over: false,

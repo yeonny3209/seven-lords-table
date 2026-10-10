@@ -27,6 +27,9 @@ function showTitle() {
     <div class="row-btns">
       <button id="tSim" class="ghost">📊 밸런스 시뮬레이션</button>
       <button id="tOnline">🌐 온라인 대결</button>
+      <button id="tDaily">📅 오늘의 도전</button>
+      <button id="tStats" class="ghost">🏅 전적</button>
+      <button id="tCodex" class="ghost">📚 도감</button>
       <button id="tHelp" class="ghost">도움말</button>
       ${saved && !saved.over ? `<button id="tCont">이어하기 (${saved.stage}-${saved.round})</button>` : ''}
       <button id="tNew" class="primary">새 게임 시작</button>
@@ -46,6 +49,9 @@ function showTitle() {
     if (c) c.onclick = () => { closeModal(); continueGame(saved); };
     box.querySelector('#tHelp').onclick = () => showHelp(showTitle);
     box.querySelector('#tOnline').onclick = showOnlineMenu;
+    box.querySelector('#tDaily').onclick = () => { closeModal(); startDaily(lord); };
+    box.querySelector('#tStats').onclick = () => showStats(showTitle);
+    box.querySelector('#tCodex').onclick = () => showCodex(showTitle);
     box.querySelector('#tSim').onclick = () => showSimulation(showTitle);
   });
 }
@@ -59,7 +65,8 @@ function showHelp(back) {
       <div><b>아이템</b><br>보관함의 재료를 유닛에 끌어다 놓으면 장착되고, 재료 2개가 모이면 완성 아이템이 됩니다. 유닛당 최대 3개. 판매 시 보관함으로 돌아옵니다.</div>
       <div><b>군주 주문</b><br>전투 중 군주 마나(초당 1.5, 아군 처치 시 +1)가 차면 주문 카드가 밝아집니다. 카드 클릭 또는 <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> → 조준(전투 0.25배속) → 대상 클릭. <kbd>Tab</kbd> 대상 순환, <kbd>Enter</kbd> 시전, <kbd>Esc</kbd>/우클릭 취소.</div>
       <div><b>자동 시전</b><br>주문서에서 주문마다 자동 시전 조건을 고를 수 있습니다. 자동 시전은 직접 시전보다 효과가 10% 약합니다. '즉시 결과' 속도에서는 모든 주문이 자동 규칙으로 시전됩니다.</div>
-      <div><b>단축키</b><br><kbd>D</kbd> 새로고침 · <kbd>F</kbd> 경험치 · <kbd>E</kbd> 마우스 아래 유닛 판매 · <kbd>Space</kbd> 준비 완료 · <kbd>B</kbd> 주문서 · <kbd>S</kbd> 전투 속도</div>
+      <div><b>단축키</b><br><kbd>D</kbd> 새로고침 · <kbd>F</kbd> 경험치 · <kbd>E</kbd> 마우스 아래 유닛 판매 · <kbd>Space</kbd> 준비 완료 · <kbd>B</kbd> 주문서 · <kbd>S</kbd> 전투 속도 · <kbd>A</kbd> 자동 배치 · <kbd>C</kbd> 도감 · <kbd>M</kbd> 효과음</div>
+      <div><b>부가 기능</b><br>📚 도감에서 유닛·시너지·주문·증강·아이템을 검색할 수 있고, 🧩 자동 배치는 보드를 한 번에 정리해 줍니다. 시작 화면의 📅 오늘의 도전은 날짜가 시드라 모두가 같은 AI 군주를 상대하고, 🏅 전적에 기록이 쌓입니다.</div>
       <div><b>라운드</b><br>1단계는 몬스터 3라운드. 2단계부터 대전·공용 선택(체력 낮은 순으로 선택)·몬스터 라운드가 섞입니다. 2·3·4단계 시작 시 증강을 고릅니다. 전투는 30초 제한이며, 15초부터 연장전으로 피해가 점점 커집니다.</div>
     </div>
     <div class="row-btns"><button class="primary" id="hBack">닫기</button></div>`, box => {
@@ -213,6 +220,7 @@ function showCarousel(st, onPick) {
 }
 
 function showGameOver(P) {
+  recordResult(P);
   if (NET.role === 'off') clearSave();
   const win = P.place === 1;
   openModal(`<div class="title-hero"><div class="crown">${win ? '👑' : '🪦'}</div>
